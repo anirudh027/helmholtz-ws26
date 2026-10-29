@@ -1,0 +1,19 @@
+[tool.ruff]
+line-length = 120
+extend-exclude = ["cellpose"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+isort.known-third-party = ["cellpose"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["dataloaders", "models", "examples"]
+exclude = ["^cellpose/"]
+check_untyped_defs = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["cellpose.*", "fastremap", "tifffile"]
+ignore_missing_imports = true
+follow_imports = "skip"
