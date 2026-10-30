@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Cloned model repos (see README)
+/cellpose/
+
+# Data and training outputs
+data/
+*.tif
+*.tiff
+*.zip
+*.pt
+*.pth
+*.ckpt
+runs/
+wandb/
+
+# Editors / OS / Synology Drive
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+@eaDir/
