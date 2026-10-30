@@ -11,6 +11,9 @@ pip install -r requirements.txt
 pre-commit install
 ```
 
+`requirements-lock.txt` pins the exact versions behind [RESULTS.md](RESULTS.md) (use it instead of
+`requirements.txt` to reproduce them).
+
 ## Datasets
 
 | Dataset | Loader | Download |
@@ -57,6 +60,7 @@ which is gitignored:
 
 ```bash
 git clone https://github.com/MouseLand/cellpose.git
+git -C cellpose checkout a54cb48   # the commit behind RESULTS.md
 pip install -e ./cellpose --config-settings editable_mode=compat   # compat: the folder must not shadow the package
 ```
 
@@ -69,27 +73,7 @@ loader = DataLoader(ds, batch_size=4, shuffle=True, num_workers=4, collate_fn=c2
 train_cellpose(model, loader, n_epochs=100, save_path="runs/cpsam_c2c12")
 ```
 
-`examples/c2c12_cellpose_sam.py` runs both steps. Results on 5 frames of C2C12 090303/F0009 (RTX 3070, 8 GB):
+Fine-tuning at batch size 4 uses 6.6 GB of GPU memory on an RTX 3070 (8 GB), thanks to gradient checkpointing.
+C2C12 masks are disks drawn around centroids, so fine-tuning on them teaches round cells: use them as weak labels.
 
-- Zero-shot: precision 0.97 and recall 0.86 against the human centroid annotation.
-- Fine-tuning at batch size 4 uses 6.6 GB of GPU memory, thanks to gradient checkpointing.
-- C2C12 masks are disks drawn around centroids, so fine-tuning on them teaches round cells. Use them as weak labels.
-
-cellX-predict has no masks, so Cellpose-SAM runs zero-shot only (`examples/cellx_cellpose_sam.py`). Reflect-pad
-the 64 x 64 crops to 256 x 256 first: unpadded, the centred nucleus is found in <10% of crops; padded, in 98%
-(256 random crops per subset).
-
-HematoFatePrediction has no masks either: zero-shot Cellpose-SAM (`examples/hemato_fate_cellpose_sam.py`) puts a
-mask within 10 px of the tracked cell at 91% of 34 track points (32 frames, ~33 masks per frame).
-
-ALFI zero-shot (`examples/alfi_cellpose_sam.py`, all 796 MI frames, 16629 cells): the masks outline nuclei while
-Cellpose-SAM segments whole cells, so detection is scored by centroid as for C2C12: precision 0.46-0.85 and recall
-0.24-0.80 per sequence (best on MI06); recall@0.5 IoU against the nucleus masks is only 0.03-0.47.
-
-Celldetective zero-shot (`examples/celldetective_cellpose_sam.py`, all images): recall@0.5 IoU / mean IoU of the
-annotated cells is 0.76 / 0.65 for MCF-7 nuclei (5705), 0.49 / 0.42 for NK cells (3798) and 0.49 / 0.41 for RICM
-lymphocytes (1925). Only one population is annotated per set, so precision is not meaningful.
-
-Xenopus zero-shot (`examples/xenopus_cellpose_sam.py`, all 45 slices per target, the matching channel alone):
-precision / recall@0.5 IoU against the authors' (model-made) segmentations is 0.80 / 0.81 for cells (membrane)
-and 0.66 / 0.58 for nuclei.
+Zero-shot results on every dataset, with the commands to reproduce them: [RESULTS.md](RESULTS.md).

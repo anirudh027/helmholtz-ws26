@@ -24,5 +24,5 @@ if __name__ == "__main__":
         masks = model.eval(sample["image"][0].numpy())[0]
         x, y = sample["points"].round().long().T.numpy()
         hits = masks[y.clip(0, masks.shape[0] - 1), x.clip(0, masks.shape[1] - 1)]
-        tp, n_pred, n_true = tp + len(np.unique(hits[hits > 0])), n_pred + masks.max(), n_true + len(x)
+        tp, n_pred, n_true = tp + len(np.unique(hits[hits > 0])), n_pred + int(masks.max()), n_true + len(x)
     print(f"zero-shot: precision={tp / n_pred:.3f} recall={tp / n_true:.3f} ({len(ds)} frames, {n_true} cells)")

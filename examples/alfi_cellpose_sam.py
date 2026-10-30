@@ -31,7 +31,7 @@ if __name__ == "__main__":
                 centroids = ndimage.center_of_mass(true > 0, true, range(1, true.max() + 1))
                 y, x = np.round(np.reshape(centroids, (-1, 2))).astype(int).T
                 hits = pred[y, x]
-                tp, n_pred = tp + len(np.unique(hits[hits > 0])), n_pred + pred.max()
+                tp, n_pred = tp + len(np.unique(hits[hits > 0])), n_pred + int(pred.max())
                 ious += _intersection_over_union(true, pred)[1:, 1:].max(1, initial=0).tolist()
         iou = np.array(ious)
         print(
