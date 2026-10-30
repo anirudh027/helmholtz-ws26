@@ -20,6 +20,7 @@ pre-commit install
 | [QPI cell death](https://doi.org/10.5281/zenodo.2601562) quantitative phase time-lapses, sparse instance masks | `dataloaders/qpi_cell_death_dataset.py` | `dataloaders/download_qpi_cell_death.sh` (~64 GB) |
 | [HematoFatePrediction](https://doi.org/10.82296/hmgu-nefeli.6qk3j-rsn72) bright-field time-lapses of hematopoietic progenitors, 2 manually tracked cells (no masks) | `dataloaders/hemato_fate_dataset.py` | `dataloaders/download_hemato_fate.sh` |
 | [ALFI](https://doi.org/10.6084/m9.figshare.23798451) DIC time-lapses of cultured human cells, boxes with cell cycle phase / death labels, nucleus masks for 8 of 29 sequences | `dataloaders/alfi_dataset.py` | `dataloaders/download_alfi.sh` (8.4 GB) |
+| [Celldetective](https://doi.org/10.5281/zenodo.17068651) fluorescence / bright-field / RICM images of NK cells and MCF-7 co-cultures, 3 instance-mask sets | `dataloaders/celldetective_dataset.py` | `dataloaders/download_celldetective.sh` (1.5 GB) |
 | [Xenopus mucociliary epithelium](https://doi.org/10.6019/S-BSST2777) 3 confocal stacks (membrane / nuclei), 3D segmentations of all cells | `dataloaders/xenopus_dataset.py` | `dataloaders/download_xenopus.sh` (3.8 GB zip) |
 
 Samples are dicts with `"image"` [C, H, W]; C2C12 adds `"target"` (`target="instance"` gives an int64 [H, W]
@@ -31,6 +32,9 @@ HematoFatePrediction gives 1040 x 1388 frames of 2 fields of view (`flatfield=Tr
 ALFI gives 1024 x 1280 frames with `"boxes"` [N, 4], `"labels"` and lineage `"ids"`: `annotation="pheno"` (all 29
 sequences) boxes only cells in EarlyMitosis / LateMitosis / CellDeath / Multipolar, `annotation="dtl"` (MI01-MI08)
 boxes every cell as Interphase / Mitosis and adds an instance `"target"`; batch with `alfi_collate`.
+Celldetective gives one image per sample (484-1628 px, sizes vary: crop to batch) with an instance `"target"`;
+`subset` picks MCF-7 nuclei, NK cells (both ADCC) or spreading lymphocytes (RICM), `channels` the channel order
+(missing channels are zeros), `split="train"/"test"` the authors' split.
 Xenopus gives 1956 x 1956 z-slices (membrane, nuclei) of the 0 h / 10 h / 20 h stacks with the slice of the
 authors' 3D `target="membrane"` or `"nuclei"` labels; the full time-lapses (S-BIAD2969, 35-64 GB each) are not
 fetched.
@@ -73,6 +77,10 @@ mask within 10 px of the tracked cell at 91% of 34 track points (32 frames, ~33 
 ALFI zero-shot (`examples/alfi_cellpose_sam.py`, all 796 MI frames, 16629 cells): the masks outline nuclei while
 Cellpose-SAM segments whole cells, so detection is scored by centroid as for C2C12: precision 0.46-0.85 and recall
 0.24-0.80 per sequence (best on MI06); recall@0.5 IoU against the nucleus masks is only 0.03-0.47.
+
+Celldetective zero-shot (`examples/celldetective_cellpose_sam.py`, all images): recall@0.5 IoU / mean IoU of the
+annotated cells is 0.76 / 0.65 for MCF-7 nuclei (5705), 0.49 / 0.42 for NK cells (3798) and 0.49 / 0.41 for RICM
+lymphocytes (1925). Only one population is annotated per set, so precision is not meaningful.
 
 Xenopus zero-shot (`examples/xenopus_cellpose_sam.py`, all 45 slices per target, the matching channel alone):
 precision / recall@0.5 IoU against the authors' (model-made) segmentations is 0.80 / 0.81 for cells (membrane)
