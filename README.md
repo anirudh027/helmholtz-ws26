@@ -22,6 +22,7 @@ pre-commit install
 | [ALFI](https://doi.org/10.6084/m9.figshare.23798451) DIC time-lapses of cultured human cells, boxes with cell cycle phase / death labels, nucleus masks for 8 of 29 sequences | `dataloaders/alfi_dataset.py` | `dataloaders/download_alfi.sh` (8.4 GB) |
 | [Celldetective](https://doi.org/10.5281/zenodo.17068651) fluorescence / bright-field / RICM images of NK cells and MCF-7 co-cultures, 3 instance-mask sets | `dataloaders/celldetective_dataset.py` | `dataloaders/download_celldetective.sh` (1.5 GB) |
 | [Xenopus mucociliary epithelium](https://doi.org/10.6019/S-BSST2777) 3 confocal stacks (membrane / nuclei), 3D segmentations of all cells | `dataloaders/xenopus_dataset.py` | `dataloaders/download_xenopus.sh` (3.8 GB zip) |
+| [p53 cell fate](https://doi.org/10.5061/dryad.pk0p2ngp5) 8 DIC-like tracking videos (p53 / p53 RNAi, +- MNNG) with burned-in track overlays, cell-lineage tracks for MNNG1 only (no masks) | `dataloaders/p53_fate_dataset.py` | `dataloaders/download_p53_fate.sh` (330 MB, needs `DRYAD_TOKEN`) |
 
 Samples are dicts with `"image"` [C, H, W]; C2C12 adds `"target"` (`target="instance"` gives an int64 [H, W]
 instance mask). cellX-predict has `subset="patches"` (96k unlabelled crops) and `subset="glimpses"` (frames of 20
@@ -38,6 +39,9 @@ Celldetective gives one image per sample (484-1628 px, sizes vary: crop to batch
 Xenopus gives 1956 x 1956 z-slices (membrane, nuclei) of the 0 h / 10 h / 20 h stacks with the slice of the
 authors' 3D `target="membrane"` or `"nuclei"` labels; the full time-lapses (S-BIAD2969, 35-64 GB each) are not
 fetched.
+p53 cell fate gives greyscale frames of 8 conditions x 401 frames (10 min apart, sizes differ per condition: one
+condition per batch, `p53_collate`). All 8 Dryad lineage tables are the same file, and it matches the MNNG1 video,
+so only MNNG1 samples add `"points"` [K, 2] (x, y) with `"cell"`, `"lineage"` and `"event"` codes (`EVENTS`).
 
 `notebooks/visualize_batches.ipynb` plots 2 batches of every loader (set the data roots in its first cell).
 Register the venv as a kernel once (`python -m ipykernel install --user --name helmholtz-ws26`), then pick it in
