@@ -39,6 +39,10 @@ Xenopus gives 1956 x 1956 z-slices (membrane, nuclei) of the 0 h / 10 h / 20 h s
 authors' 3D `target="membrane"` or `"nuclei"` labels; the full time-lapses (S-BIAD2969, 35-64 GB each) are not
 fetched.
 
+`notebooks/visualize_batches.ipynb` plots 2 batches of every loader (set the data roots in its first cell).
+Register the venv as a kernel once (`python -m ipykernel install --user --name helmholtz-ws26`), then pick it in
+VS Code or Jupyter.
+
 ## Models
 
 ### Cellpose-SAM
