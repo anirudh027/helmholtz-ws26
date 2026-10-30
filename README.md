@@ -19,6 +19,7 @@ pre-commit install
 | [cellX-predict](https://doi.org/10.5522/04/16578959) MDCK 64x64 nucleus crops, GFP/RFP (no masks) | `dataloaders/cellx_predict_dataset.py` | `dataloaders/download_cellx_predict.sh` |
 | [QPI cell death](https://doi.org/10.5281/zenodo.2601562) quantitative phase time-lapses, sparse instance masks | `dataloaders/qpi_cell_death_dataset.py` | `dataloaders/download_qpi_cell_death.sh` (~64 GB) |
 | [HematoFatePrediction](https://doi.org/10.82296/hmgu-nefeli.6qk3j-rsn72) bright-field time-lapses of hematopoietic progenitors, 2 manually tracked cells (no masks) | `dataloaders/hemato_fate_dataset.py` | `dataloaders/download_hemato_fate.sh` |
+| [ALFI](https://doi.org/10.6084/m9.figshare.23798451) DIC time-lapses of cultured human cells, boxes with cell cycle phase / death labels, nucleus masks for 8 of 29 sequences | `dataloaders/alfi_dataset.py` | `dataloaders/download_alfi.sh` (8.4 GB) |
 | [Xenopus mucociliary epithelium](https://doi.org/10.6019/S-BSST2777) 3 confocal stacks (membrane / nuclei), 3D segmentations of all cells | `dataloaders/xenopus_dataset.py` | `dataloaders/download_xenopus.sh` (3.8 GB zip) |
 
 Samples are dicts with `"image"` [C, H, W]; C2C12 adds `"target"` (`target="instance"` gives an int64 [H, W]
@@ -27,6 +28,9 @@ time-lapses ending in apoptosis or mitosis, with `"event"` labels). QPI cell dea
 (pg/um^2) with an instance `"target"` of the annotated cells; per-cell death type and frame are in `ds.labels`.
 HematoFatePrediction gives 1040 x 1388 frames of 2 fields of view (`flatfield=True` divides by the background) and
 `"points"` [2, 2], the (x, y) of the two tracked cells (`ds.cell_ids`), NaN where a cell is not tracked.
+ALFI gives 1024 x 1280 frames with `"boxes"` [N, 4], `"labels"` and lineage `"ids"`: `annotation="pheno"` (all 29
+sequences) boxes only cells in EarlyMitosis / LateMitosis / CellDeath / Multipolar, `annotation="dtl"` (MI01-MI08)
+boxes every cell as Interphase / Mitosis and adds an instance `"target"`; batch with `alfi_collate`.
 Xenopus gives 1956 x 1956 z-slices (membrane, nuclei) of the 0 h / 10 h / 20 h stacks with the slice of the
 authors' 3D `target="membrane"` or `"nuclei"` labels; the full time-lapses (S-BIAD2969, 35-64 GB each) are not
 fetched.
@@ -65,6 +69,10 @@ the 64 x 64 crops to 256 x 256 first: unpadded, the centred nucleus is found in 
 
 HematoFatePrediction has no masks either: zero-shot Cellpose-SAM (`examples/hemato_fate_cellpose_sam.py`) puts a
 mask within 10 px of the tracked cell at 91% of 34 track points (32 frames, ~33 masks per frame).
+
+ALFI zero-shot (`examples/alfi_cellpose_sam.py`, all 796 MI frames, 16629 cells): the masks outline nuclei while
+Cellpose-SAM segments whole cells, so detection is scored by centroid as for C2C12: precision 0.46-0.85 and recall
+0.24-0.80 per sequence (best on MI06); recall@0.5 IoU against the nucleus masks is only 0.03-0.47.
 
 Xenopus zero-shot (`examples/xenopus_cellpose_sam.py`, all 45 slices per target, the matching channel alone):
 precision / recall@0.5 IoU against the authors' (model-made) segmentations is 0.80 / 0.81 for cells (membrane)
