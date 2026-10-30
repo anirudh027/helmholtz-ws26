@@ -17,10 +17,15 @@ pre-commit install
 | --- | --- | --- |
 | [C2C12](https://osf.io/ysaq2/) phase-contrast time-lapse (centroid tracks only) | `dataloaders/c2c12_dataset.py` | `dataloaders/download_c2c12.sh` |
 | [cellX-predict](https://doi.org/10.5522/04/16578959) MDCK 64x64 nucleus crops, GFP/RFP (no masks) | `dataloaders/cellx_predict_dataset.py` | `dataloaders/download_cellx_predict.sh` |
+| [QPI cell death](https://doi.org/10.5281/zenodo.2601562) quantitative phase time-lapses, sparse instance masks | `dataloaders/qpi_cell_death_dataset.py` | `dataloaders/download_qpi_cell_death.sh` (~64 GB) |
+| [HematoFatePrediction](https://doi.org/10.82296/hmgu-nefeli.6qk3j-rsn72) bright-field time-lapses of hematopoietic progenitors, 2 manually tracked cells (no masks) | `dataloaders/hemato_fate_dataset.py` | `dataloaders/download_hemato_fate.sh` |
 
 Samples are dicts with `"image"` [C, H, W]; C2C12 adds `"target"` (`target="instance"` gives an int64 [H, W]
 instance mask). cellX-predict has `subset="patches"` (96k unlabelled crops) and `subset="glimpses"` (frames of 20
-time-lapses ending in apoptosis or mitosis, with `"event"` labels).
+time-lapses ending in apoptosis or mitosis, with `"event"` labels). QPI cell death gives 600 x 600 phase frames
+(pg/um^2) with an instance `"target"` of the annotated cells; per-cell death type and frame are in `ds.labels`.
+HematoFatePrediction gives 1040 x 1388 frames of 2 fields of view (`flatfield=True` divides by the background) and
+`"points"` [2, 2], the (x, y) of the two tracked cells (`ds.cell_ids`), NaN where a cell is not tracked.
 
 ## Models
 
@@ -53,3 +58,6 @@ train_cellpose(model, loader, n_epochs=100, save_path="runs/cpsam_c2c12")
 cellX-predict has no masks, so Cellpose-SAM runs zero-shot only (`examples/cellx_cellpose_sam.py`). Reflect-pad
 the 64 x 64 crops to 256 x 256 first: unpadded, the centred nucleus is found in <10% of crops; padded, in 98%
 (256 random crops per subset).
+
+HematoFatePrediction has no masks either: zero-shot Cellpose-SAM (`examples/hemato_fate_cellpose_sam.py`) puts a
+mask within 10 px of the tracked cell at 91% of 34 track points (32 frames, ~33 masks per frame).
