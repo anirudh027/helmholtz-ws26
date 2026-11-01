@@ -10,6 +10,7 @@ from Damià Vicens Ramis' Cell-project (scripts/ctc_io.py).
 
 import glob
 import os
+import re
 from dataclasses import dataclass, field
 
 import networkx as nx
@@ -70,9 +71,15 @@ def write_ctc(out_dir, masks, tracks: Tracks):
             fh.write(f"{tid} {t0} {t1} {parent}\n")
 
 
+def _frame_number(path):
+    return int(re.findall(r"\d+", os.path.basename(path))[-1])
+
+
 def read_ctc(res_dir) -> CTCResult:
     """Read a CTC RES folder back into a CTCResult."""
-    mask_files = sorted(glob.glob(os.path.join(res_dir, "mask*.tif")))
+    # Sort numerically: writers like Ultrack switch from mask999 to mask1000,
+    # which a plain string sort would interleave (mask100, mask1000, mask101, ...).
+    mask_files = sorted(glob.glob(os.path.join(res_dir, "mask*.tif")), key=_frame_number)
     masks = np.stack([np.squeeze(tifffile.imread(f)) for f in mask_files]).astype(np.uint16)
     tracks = {}
     with open(os.path.join(res_dir, "res_track.txt")) as fh:
