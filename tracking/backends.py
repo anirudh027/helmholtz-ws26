@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from contextlib import contextmanager
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -111,8 +112,8 @@ def track_ultrack(imgs, masks, max_distance=40.0):
         cfg.tracking_config.appear_weight = -0.25
         cfg.tracking_config.disappear_weight = -0.25
         ultrack_track(cfg, detection=detection, edges=edges, overwrite=True)
-        res_dir = os.path.join(work, "RES")
-        os.makedirs(res_dir)
+        res_dir = Path(work) / "RES"
+        res_dir.mkdir()
         to_ctc(res_dir, cfg, overwrite=True)
         return read_ctc(res_dir)
 
