@@ -1,10 +1,10 @@
-"""Run tracking backends over datasets in CTC layout and score them.
+"""Run tracking backends over the WS26 datasets and score them where ground truth exists.
 
-    python scripts/track_all.py --datasets BF-C2DL-MuSC --backends laptrack trackastra hoct
-    python scripts/track_all.py --datasets BF-C2DL-MuSC --backends laptrack --limit 20   # smoke test
+    python scripts/track_all.py --datasets musc --backends laptrack trackastra hoct
+    python scripts/track_all.py --datasets all --backends laptrack trackastra --limit 50 --max-seqs 1  # smoke test
 
-Writes ``<out>/<dataset>/<backend>/<seq>_RES/`` (CTC) + ``runtime.json`` and,
-where ground truth exists, ``<out>/<dataset>/metrics_<seq>.csv``.
+Writes ``<out>/<dataset>/<backend>/<seq>_RES/`` (CTC) and ``<out>/<dataset>/results.csv``.
+Datasets without masks get provisional Cellpose-SAM masks (cached under ``_provisional_masks/``).
 """
 
 import argparse
@@ -13,68 +13,84 @@ import os
 import sys
 import traceback
 
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tracking import TRACKERS, load_sequence, track, write_ctc  # noqa: E402
+from tracking import TRACKERS, track, write_ctc  # noqa: E402
+from tracking.datasets import ADAPTERS, NOT_TRACKABLE, iter_sequences  # noqa: E402
 
-# name -> CTC dataset folder (contains <seq>/, <seq>_ST/SEG, optionally <seq>_GT)
-DATASETS = {
-    "BF-C2DL-MuSC": "/mnt/1t/stem_cell_fate_prediction/datasets/BF-C2DL-MuSC/Training",
-}
 
-# Per-dataset backend kwargs (Damià's benchmark settings).
-BACKEND_KWARGS = {
-    "BF-C2DL-MuSC": {"laptrack": {"max_distance": 40.0}, "ultrack": {"max_distance": 40.0}},
-}
+def masks_for(seq, out_ds):
+    if seq.masks is not None:
+        return seq.masks, False
+    cache = os.path.join(out_ds, "_provisional_masks", f"{seq.name}_T{len(seq.imgs)}.npy")
+    if os.path.exists(cache):
+        return np.load(cache), True
+    from tracking.segment import segment_cellpose_sam
+
+    masks = segment_cellpose_sam(seq.imgs)
+    os.makedirs(os.path.dirname(cache), exist_ok=True)
+    np.save(cache, masks)
+    return masks, True
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--datasets", nargs="+", default=list(DATASETS))
+    ap.add_argument("--datasets", nargs="+", default=["musc"], help=f"{list(ADAPTERS)} or 'all'")
     ap.add_argument("--backends", nargs="+", default=["laptrack", "trackastra", "hoct"])
-    ap.add_argument("--seqs", nargs="+", default=["01"])
     ap.add_argument("--out", default="/mnt/1t/tracks")
-    ap.add_argument("--limit", type=int, default=None, help="only the first N frames")
+    ap.add_argument("--limit", type=int, default=None, help="only the first N frames of each sequence")
+    ap.add_argument("--max-seqs", type=int, default=None, help="only the first N sequences per dataset")
     ap.add_argument("--no-eval", action="store_true")
     args = ap.parse_args()
 
+    datasets = list(ADAPTERS) if args.datasets == ["all"] else args.datasets
     unknown = set(args.backends) - set(TRACKERS)
     if unknown:
         ap.error(f"unknown backends {sorted(unknown)}; choose from {list(TRACKERS)}")
+    for name, why in NOT_TRACKABLE.items():
+        print(f"[{name}] skipped: {why}", flush=True)
 
-    for ds in args.datasets:
-        ds_dir = DATASETS.get(ds, ds)
-        name = ds if ds in DATASETS else os.path.basename(os.path.normpath(ds))
-        out_ds = os.path.join(args.out, name + (f"_first{args.limit}" if args.limit else ""))
-        for seq in args.seqs:
-            imgs, masks = load_sequence(ds_dir, seq, args.limit)
-            print(f"[{name}/{seq}] loaded {imgs.shape}", flush=True)
-            gt_dir = os.path.join(ds_dir, f"{seq}_GT")
-            rows = []
-            for backend in args.backends:
-                res_dir = os.path.join(out_ds, backend, f"{seq}_RES")
-                try:
-                    kw = BACKEND_KWARGS.get(name, {}).get(backend, {})
-                    res = track(imgs, masks, model=backend, **kw)
-                except Exception:
-                    print(f"[{name}/{seq}] {backend} FAILED", flush=True)
-                    traceback.print_exc()
-                    continue
-                write_ctc(res_dir, res.masks, res.tracks)
-                with open(os.path.join(out_ds, backend, "runtime.json"), "w") as f:
-                    json.dump(res.info, f)
-                row = {"method": backend, "tracks": len(res.tracks), "runtime_s": round(res.info["seconds"], 1)}
-                if os.path.isdir(gt_dir) and not args.no_eval and not args.limit:
-                    from tracking.evaluate import evaluate
+    for ds_name in datasets:
+        out_ds = os.path.join(args.out, ds_name + (f"_first{args.limit}" if args.limit else ""))
+        rows = []
+        try:
+            seqs = iter_sequences(ds_name, limit=args.limit, max_seqs=args.max_seqs)
+            for seq in seqs:
+                masks, provisional = masks_for(seq, out_ds)
+                print(f"[{ds_name}/{seq.name}] imgs {seq.imgs.shape}, masks {'provisional ' if provisional else ''}"
+                      f"{masks.shape}, {seq.note}", flush=True)
+                for backend in args.backends:
+                    row = {"dataset": ds_name, "seq": seq.name, "method": backend, "frames": len(seq.imgs),
+                           "provisional_masks": provisional}
+                    try:
+                        res = track(seq.imgs, masks, model=backend)
+                    except Exception as e:
+                        print(f"[{ds_name}/{seq.name}] {backend} FAILED", flush=True)
+                        traceback.print_exc()
+                        rows.append({**row, "ok": False, "error": f"{type(e).__name__}: {e}"[:200]})
+                        continue
+                    res_dir = os.path.join(out_ds, backend, f"{seq.name}_RES")
+                    write_ctc(res_dir, res.masks, res.tracks)
+                    with open(os.path.join(res_dir, "runtime.json"), "w") as f:
+                        json.dump(res.info, f)
+                    row.update(ok=True, tracks=len(res.tracks), runtime_s=round(res.info["seconds"], 1))
+                    if seq.gt_dir and os.path.isdir(seq.gt_dir) and not args.no_eval:
+                        from tracking.evaluate import evaluate
 
-                    row.update(evaluate(res_dir, gt_dir))
-                rows.append(row)
-                print(f"[{name}/{seq}] {row}", flush=True)
-            if rows:
-                df = pd.DataFrame(rows)
-                df.to_csv(os.path.join(out_ds, f"metrics_{seq}.csv"), index=False)
-                print(df.to_string(index=False), flush=True)
+                        row.update(evaluate(res_dir, seq.gt_dir))
+                    rows.append(row)
+                    print(f"[{ds_name}/{seq.name}] {row}", flush=True)
+        except Exception as e:
+            print(f"[{ds_name}] FAILED to load", flush=True)
+            traceback.print_exc()
+            rows.append({"dataset": ds_name, "ok": False, "error": f"load: {type(e).__name__}: {e}"[:200]})
+        if rows:
+            os.makedirs(out_ds, exist_ok=True)
+            df = pd.DataFrame(rows)
+            df.to_csv(os.path.join(out_ds, "results.csv"), index=False)
+            print(df.to_string(index=False), flush=True)
 
 
 if __name__ == "__main__":
