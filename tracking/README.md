@@ -85,6 +85,12 @@ Fill the `correct` column of `labels.csv` with 1 (same cell, or mother → daugh
 `sheet_rXX.png` (red cross = cell in the earlier frame, cyan = proposed match). The verdicts double
 as point ground truth for the Helmholtz video.
 
+Simulated with a GT oracle (400 links): HeLa 02 LNK .9933 → .9949, BC .934 → .951; MuSC 02 LNK
+.9651 → .9696 but BC .864 → .791, because the most uncertain links are rarely divisions. Gap filling
+alone (`hoct_koft`) does better on MuSC without any labels, so use `hoct_koft_tta` for final tracks;
+before trusting the corrected tracks, add division candidates to the proposals and run the gap
+filling on top.
+
 Credits: the registry API is from Nikolas Rieger, the unified module and dataset adapters from
 Giuseppe Giglio, the dataloaders from Florian Donhauser. CTC I/O, backend settings, the HOCT+KOFT
 hybrid and the stage registration are from Damià Vicens Ramis' Cell-project benchmark.
