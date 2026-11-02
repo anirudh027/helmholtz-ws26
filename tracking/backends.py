@@ -7,15 +7,12 @@ are comparable with his results tables.
 
 import os
 import shutil
-import subprocess
-import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import tifffile
 
 from .ctc import CTCResult, centroids_of, read_ctc, tracks_from_assignment
 
@@ -118,23 +115,23 @@ def track_ultrack(imgs, masks, max_distance=40.0):
         return read_ctc(res_dir)
 
 
-def track_hoct(imgs, masks, model="general_v1", config=None, device="automatic"):
-    """HOCT (higher-order candidate-link transformer + ILP) via its CLI."""
-    hoct = shutil.which("hoct") or os.path.join(os.path.dirname(sys.executable), "hoct")
-    with _scratch("hoct_") as work:
-        img_t, seg_t = os.path.join(work, "imgs.tif"), os.path.join(work, "segm.tif")
-        tifffile.imwrite(img_t, imgs)
-        tifffile.imwrite(seg_t, masks)
-        res_dir = os.path.join(work, "RES")
-        cmd = [hoct, "track", img_t, seg_t, "-m", model, "-o", res_dir, "-f", "ctc", "--device", _device(device)]
-        if config:
-            cmd += ["-c", config]
-        subprocess.run(cmd, check=True)
-        return read_ctc(res_dir)
+def track_hoct(imgs, masks, model="general_v1", tta=0, max_distance=300.0, max_dt=3, n_neighbors=5,
+               solver=None, device="automatic", seed=0):
+    """HOCT (higher-order candidate-link transformer + two-pass ILP) via its Python API.
+
+    ``tta=0`` reproduces ``hoct track`` (the CLI); ``tta=6`` is the paper's best
+    configuration. ``solver`` overrides ``ILPSolverConfig`` fields."""
+    from .hoct import HOCT
+
+    return HOCT(model=model, tta=tta, max_distance=max_distance, max_dt=max_dt, n_neighbors=n_neighbors,
+                solver=solver or {}, device=device, seed=seed).track(imgs, masks)
 
 
-def track_hoct_koft(imgs, masks, **kwargs):
-    """HOCT + KOFT-style optical-flow gap filling (Damià's hybrid, #1 in his benchmark)."""
-    raise NotImplementedError(
-        "hoct_koft is pending: waiting for Damià to push his hybrid into helmholtz-ws26 "
-        "(Cell-project/scripts/run_hybrid.py). Use model='hoct' meanwhile.")
+def track_hoct_koft(imgs, masks, tta=0, max_gap=3, max_dist=60.0, appearance_thresh=0.25, **hoct_kwargs):
+    """HOCT + KOFT-style optical-flow gap filling (Damià's hybrid, #1 in his benchmark).
+
+    See ``tracking/koft.py``. ``hoct_kwargs`` go to ``track_hoct``."""
+    from .koft import fill_gaps
+
+    res = track_hoct(imgs, masks, tta=tta, **hoct_kwargs)
+    return fill_gaps(imgs, res, max_gap=max_gap, max_dist=max_dist, appearance_thresh=appearance_thresh)
