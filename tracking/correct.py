@@ -44,6 +44,7 @@ class Corrector:
         self.h = dataclasses.replace(hoct or HOCT(), tile="off")
         self.shape = np.shape(masks)
         self.graph = self.h.build_graph(imgs, masks)
+        self.candidates = set(self.graph.edge_ids())
         self.model = load_model(self.h.model, self.h._device())
         self.labels: dict[int, bool] = {}
         self.n_labels = 0
@@ -52,6 +53,11 @@ class Corrector:
     def _solve(self):
         import tracksdata as td
 
+        # The tracklet solver adds its inter-tracklet links to the graph; drop them before
+        # re-solving, or they get scored and shift the parent softmax of the real candidates.
+        extra = sorted(set(self.graph.edge_ids()) - self.candidates)
+        if extra:
+            self.graph.bulk_remove_edges(extra)
         self.solution = self.h.predict(self.graph, self.model)
         self.edges = self.graph.edge_attrs(attr_keys=[
             td.DEFAULT_ATTR_KEYS.EDGE_ID, td.DEFAULT_ATTR_KEYS.EDGE_SOURCE, td.DEFAULT_ATTR_KEYS.EDGE_TARGET,
@@ -102,21 +108,108 @@ class Corrector:
 
     def refit(self, **kwargs):
         """Fit the linear probe on all labels so far and re-solve."""
-        from hoct.correction import fit_from_labels
-
         ids = list(self.labels)
         self.graph.add_edge_attr_key(LABEL_MASK, pl.Boolean, False)
         self.graph.add_edge_attr_key(LABEL, pl.Boolean, False)
         try:
             self.graph.update_edge_attrs(edge_ids=ids, attrs={LABEL_MASK: [True] * len(ids),
                                                               LABEL: [self.labels[i] for i in ids]})
-            self.model = fit_from_labels(self.graph, self.model, LABEL_MASK, LABEL,
-                                         tiling_scheme=self.h.tiling(self.graph), window_size=self.h.window,
-                                         test_time_augs=self.h.tta, **kwargs)
+            self.model = fit_probe(self.graph, self.model, window_size=self.h.window,
+                                   test_time_augs=self.h.tta, **kwargs)
         finally:
             self.graph.remove_edge_attr_key(LABEL_MASK)
             self.graph.remove_edge_attr_key(LABEL)
         self._solve()
+
+
+# --------------------------------------------------------------------------- #
+# Linear probe
+# --------------------------------------------------------------------------- #
+# hoct 0.2.0's ProbedModel / fit_from_labels put the new head directly on the
+# backbone's edge features, but the checkpoint's own logit is
+# head(dropout(head_norm(features))): the features are returned *before*
+# head_norm. Initialised from `head` on unnormalised features and L2-shrunk
+# towards zero (weight 288/n_labels), the probe flattens every link score after
+# a round or two and the ILP drops the divisions (HeLa-02: LNK .993 -> .783,
+# BC .93 -> 0 after 40 labels). Here the probe sits on head_norm(features),
+# starts from the pretrained head and is regularised towards it.
+
+
+def _probe_class():
+    import torch
+    from hoct.inference import EdgeModel, ModelPrediction
+    from torch import nn
+
+    class NormProbedModel(EdgeModel):
+        def __init__(self, backbone, weight, bias):
+            super().__init__()
+            self._edge_model = backbone
+            self._head = nn.Linear(weight.numel(), 1)
+            self._head.weight.data = weight.detach().reshape(1, -1).clone()
+            self._head.bias.data = bias.detach().reshape(1).clone()
+
+        def forward(self, *args, **kwargs):
+            _, node_features, edge_features, orphan_logits = self._edge_model(*args, **kwargs)
+            with torch.no_grad():
+                logits = self._head(self._edge_model.head_norm(edge_features))
+            return ModelPrediction(edge_logits=logits, node_features=node_features,
+                                   edge_features=edge_features, orphan_logits=orphan_logits)
+
+    return NormProbedModel
+
+
+def fit_probe(graph, model, window_size=5, test_time_augs=0, n_steps=200, l2_weight=1.0,
+              consistency_weight=0.25):
+    """Logistic-regression head on HOCT's normalised link features, fitted to the
+    labelled links (``LABEL_MASK`` / ``LABEL`` edge attributes) by full-batch L-BFGS.
+
+    Loss = class-balanced BCE on the labels
+         + l2_weight * 288 / n_labels * ||w - w_pretrained||^2
+         + consistency_weight * 288 / n_labels * BCE(unlabelled links, current ILP solution),
+    so with few labels the head stays close to the pretrained one and to the current tracks."""
+    import torch
+    import tracksdata as td
+    from hoct._api import _create_dataset
+    from hoct.data import LabeledDataset
+    from hoct.inference import extract_edge_features
+    from torch import nn
+
+    backbone = getattr(model, "_edge_model", model)
+    device = next(backbone.parameters()).device
+    ds = LabeledDataset(_create_dataset(graph, None, window_size, test_time_augs), LABEL_MASK)
+    feats = extract_edge_features(backbone, ds, edge_filter_key=None)
+    attrs = graph.edge_attrs(attr_keys=[td.DEFAULT_ATTR_KEYS.EDGE_ID, LABEL_MASK, LABEL,
+                                        td.DEFAULT_ATTR_KEYS.SOLUTION])
+    lab = attrs.filter(pl.col(LABEL_MASK)).join(feats, on=td.DEFAULT_ATTR_KEYS.EDGE_ID, how="inner")
+    unl = attrs.filter(~pl.col(LABEL_MASK)).join(feats, on=td.DEFAULT_ATTR_KEYS.EDGE_ID, how="inner")
+    norm = backbone.head_norm
+    with torch.no_grad():
+        X = norm(lab["edge_features"].to_torch().float().to(device))
+        Xu = norm(unl["edge_features"].to_torch().float().to(device)) if len(unl) else None
+    y = lab[LABEL].to_torch().float().to(device)
+    yu = unl[td.DEFAULT_ATTR_KEYS.SOLUTION].to_torch().float().to(device) if len(unl) else None
+
+    w0 = backbone.head.weight.detach().float().to(device)
+    b0 = backbone.head.bias.detach().float().to(device)
+    head = nn.Linear(w0.shape[1], 1).to(device)
+    head.weight.data, head.bias.data = w0.clone(), b0.clone()
+    n_labels = max(int(attrs[LABEL_MASK].sum()), 1)
+    scale = w0.shape[1] / n_labels
+    pos_weight = (y.numel() - y.sum()).clamp(min=1) / y.sum().clamp(min=1)
+    bce = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    opt = torch.optim.LBFGS(head.parameters(), lr=0.1, max_iter=n_steps)
+
+    def closure():
+        opt.zero_grad()
+        loss = bce(head(X).squeeze(-1), y) + l2_weight * scale * ((head.weight - w0) ** 2).sum()
+        if Xu is not None and consistency_weight > 0:
+            loss = loss + consistency_weight * scale * nn.functional.binary_cross_entropy_with_logits(
+                head(Xu).squeeze(-1), yu.clamp(1e-6, 1 - 1e-6))
+        loss.backward()
+        return loss
+
+    opt.step(closure)
+    return _probe_class()(backbone, head.weight.data.float(), head.bias.data.float()).to(device)
 
 
 # --------------------------------------------------------------------------- #
