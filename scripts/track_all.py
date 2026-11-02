@@ -134,7 +134,7 @@ def main():
                       f"{masks.shape}, {seq.note}", flush=True)
                 for backend in args.backends:
                     method = backend + (f"_{args.tag}" if args.tag else "") + ptag
-                    row = {"dataset": ds_name, "seq": seq.name, "method": method, "frames": len(seq.imgs),
+                    row = {"dataset": ds_dir, "seq": seq.name, "method": method, "frames": len(seq.imgs),
                            "provisional_masks": provisional, "registered": args.register,
                            "preprocess": args.preprocess}
                     try:
@@ -156,7 +156,7 @@ def main():
         except Exception as e:
             print(f"[{ds_name}] FAILED to load", flush=True)
             traceback.print_exc()
-            rows.append({"dataset": ds_name, "ok": False, "error": f"load: {type(e).__name__}: {e}"[:200]})
+            rows.append({"dataset": ds_dir, "ok": False, "error": f"load: {type(e).__name__}: {e}"[:200]})
         if rows:
             os.makedirs(out_ds, exist_ok=True)
             df = pd.DataFrame(rows)

@@ -27,6 +27,9 @@ TRACKERS = {
     "hoct_tta": partial(backends.track_hoct, tta=6),  # paper's best configuration
     "hoct_koft": backends.track_hoct_koft,
     "hoct_koft_tta": partial(backends.track_hoct_koft, tta=6),
+    # + gap filling across up to 8 missing frames (HOCT links stay <= 3 frames, so its
+    # division decisions are unchanged): for flickering masks, e.g. the Helmholtz reporter
+    "hoct_koft_tta_long": partial(backends.track_hoct_koft, tta=6, max_gap=8),
 }
 
 
