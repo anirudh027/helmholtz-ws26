@@ -31,6 +31,8 @@ def main():
     ap.add_argument("--per-round", type=int, default=20)
     ap.add_argument("--eval-every", type=int, default=2, help="score every N rounds")
     ap.add_argument("--tta", type=int, default=0)
+    ap.add_argument("--division-frac", type=float, default=0.5, help="share of each round from division candidates")
+    ap.add_argument("--no-gap-fill", action="store_true", help="score the corrected HOCT tracks without hoct_koft")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--out", default="/mnt/1t/tracks/correction_sim")
     args = ap.parse_args()
@@ -39,7 +41,8 @@ def main():
     if not seq.gt_dir:
         ap.error(f"{args.dataset}/{args.seq} has no CTC ground truth (use the full sequence, no --limit)")
     gt_dir = seq.gt_dir
-    out = os.path.join(args.out, f"{args.dataset}_{args.seq}_tta{args.tta}")
+    out = os.path.join(args.out, f"{args.dataset}_{args.seq}_tta{args.tta}_div{args.division_frac}"
+                       + ("_nofill" if args.no_gap_fill else ""))
     os.makedirs(out, exist_ok=True)
 
     t0 = time.time()
@@ -49,7 +52,7 @@ def main():
 
     def score(r):
         res_dir = os.path.join(out, f"round{r:02d}", f"{args.seq}_RES")
-        res = c.result()
+        res = c.result(gap_fill=not args.no_gap_fill)
         write_ctc(res_dir, res.masks, res.tracks)
         m = evaluate(res_dir, gt_dir, metrics=["TRA", "DET", "LNK", "BC"])
         m.update(round=r, n_labels=c.n_labels, minutes=(time.time() - t0) / 60,
@@ -60,11 +63,14 @@ def main():
 
     score(0)
     for r in range(1, args.rounds + 1):
-        q = c.propose(args.per_round)
+        q = c.propose(args.per_round, division_frac=args.division_frac)
         q["correct"] = oracle(q)
+        n_div = int((q["kind"] == "division").sum())
+        n_div_ok = int(q.loc[q["kind"] == "division", "correct"].sum())
         c.annotate(q)
         c.refit()
         print(f"round {r}: {c.n_labels} labels, {q['correct'].mean():.2f} of this round correct, "
+              f"{n_div} division candidates ({n_div_ok} real daughters), "
               f"{(time.time() - t0) / 60:.1f} min", flush=True)
         if r % args.eval_every == 0 or r == args.rounds:
             score(r)

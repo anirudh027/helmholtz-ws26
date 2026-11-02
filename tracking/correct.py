@@ -43,6 +43,7 @@ class Corrector:
         # so predict and fit both run untiled (fine on a 97 GB GPU).
         self.h = dataclasses.replace(hoct or HOCT(), tile="off")
         self.shape = np.shape(masks)
+        self.imgs = imgs
         self.graph = self.h.build_graph(imgs, masks)
         self.candidates = set(self.graph.edge_ids())
         self.model = load_model(self.h.model, self.h._device())
@@ -66,11 +67,15 @@ class Corrector:
         self.edges = self.edges[self.edges["similarity"] >= 0].reset_index(drop=True)
         self.edges[LABEL_MASK] = self.edges["edge_id"].isin(list(self.labels))
 
-    def result(self) -> CTCResult:
+    def result(self, gap_fill=True) -> CTCResult:
+        """Current tracks; ``gap_fill`` applies the hoct_koft gap filling on top."""
         from .backends import _scratch
+        from .koft import fill_gaps
 
         with _scratch("hoct_corr_") as work:
             res = solution_to_ctc(self.solution, self.graph.metadata.get("shape", self.shape), work)
+        if gap_fill:
+            res = fill_gaps(self.imgs, res)
         res.info.update(n_labels=self.n_labels)
         return res
 
@@ -79,17 +84,30 @@ class Corrector:
 
         return self.graph.node_attrs(attr_keys=[td.DEFAULT_ATTR_KEYS.NODE_ID, "t", "y", "x"]).to_pandas()
 
-    def propose(self, n=20) -> pd.DataFrame:
-        """The ``n`` unlabelled links whose probability is closest to 0.5, with the
-        source / target positions an annotator needs."""
+    def propose(self, n=20, division_frac=0.5) -> pd.DataFrame:
+        """``n`` unlabelled links to verify, with the source / target positions an
+        annotator needs.
+
+        Uncertainty sampling alone (probability closest to 0.5) almost never proposes
+        divisions, and the refitted head then leans against them (MuSC 02: BC .864 -> .79
+        after 400 labels). So ``division_frac`` of each round are division candidates:
+        for every node whose two best links into the same next frame both have
+        probability > 0.1, the weaker of the two (is it really a second daughter?),
+        most ambiguous first. The rest is plain uncertainty sampling."""
         e = self.edges[~self.edges[LABEL_MASK]].copy()
         e["uncertainty"] = -np.abs(e["similarity"] - 0.5)
-        e = e.nlargest(n, "uncertainty")
         nd = self.nodes().set_index("node_id")
+        e["tgt_t"] = nd.loc[e["target_id"], "t"].to_numpy()
+        strong = e[e["similarity"] > 0.1].sort_values("similarity", ascending=False)
+        second = strong.groupby(["source_id", "tgt_t"]).nth(1)  # 2nd-best link of a would-be mother
+        n_div = min(int(round(n * division_frac)), len(second))
+        div = second.assign(uncertainty=-np.abs(second["similarity"] - 0.5)).nlargest(n_div, "uncertainty")
+        rest = e[~e["edge_id"].isin(div["edge_id"])].nlargest(n - n_div, "uncertainty")
+        e = pd.concat([div.assign(kind="division"), rest.assign(kind="uncertain")])
         for side, col in (("src", "source_id"), ("tgt", "target_id")):
             for k in ("t", "y", "x"):
                 e[f"{side}_{k}"] = nd.loc[e[col], k].to_numpy()
-        return e.reset_index(drop=True)  # columns edge_id, source_id, target_id, similarity, ...
+        return e.reset_index(drop=True)  # columns edge_id, source_id, target_id, similarity, kind, ...
 
     def annotate(self, links: pd.DataFrame):
         """Record verdicts (column ``correct``: True = same cell / mother-daughter).

@@ -46,7 +46,7 @@ def load_masks_dir(masks_dir, seq):
     return np.stack([np.squeeze(tifffile.imread(f)) for f in files]) if files else None
 
 
-def masks_for(seq, out_ds, source="provided", masks_dir=None):
+def masks_for(seq, out_ds, source="provided", masks_dir=None, seq_tag=""):
     if masks_dir:
         masks_dir = masks_dir.format(dataset=seq.dataset)
         m = load_masks_dir(masks_dir, seq)
@@ -58,7 +58,7 @@ def masks_for(seq, out_ds, source="provided", masks_dir=None):
         print(f"[{seq.dataset}/{seq.name}] no masks in {masks_dir}, falling back to '{source}'", flush=True)
     if seq.masks is not None and source == "provided":
         return seq.masks, False
-    cache = os.path.join(out_ds, "_provisional_masks", f"{seq.name}_T{len(seq.imgs)}.npy")
+    cache = os.path.join(out_ds, "_provisional_masks", f"{seq.name}_T{len(seq.imgs)}{seq_tag}.npy")
     if os.path.exists(cache):
         return np.load(cache), True
     from tracking.segment import segment_cellpose_sam
@@ -91,7 +91,7 @@ def score(seq, res, res_dir, out_ds, method, point_radius):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--datasets", nargs="+", default=["musc"], help=f"{list(ADAPTERS)} or 'all'")
+    ap.add_argument("--datasets", nargs="+", default=["musc"], help=f"{list(ADAPTERS)}, 'all', or ctc:<path> (any CTC-layout folder)")
     ap.add_argument("--backends", nargs="+", default=["laptrack", "trackastra", "hoct"])
     ap.add_argument("--out", default="/mnt/1t/tracks")
     ap.add_argument("--limit", type=int, default=None, help="only the first N frames of each sequence")
@@ -102,6 +102,8 @@ def main():
                     help="'cellpose': ignore shipped masks (e.g. ALFI's GT masks) and segment with Cellpose-SAM")
     ap.add_argument("--masks-dir", default=None,
                     help="external masks (e.g. Team 2's Cellpose-SAM), per sequence: <dir>/<seq>.npy|.tif or <dir>/<seq>/*.tif; '{dataset}' in the path is filled in")
+    ap.add_argument("--preprocess", choices=["none", "percentile", "hist_eq", "clahe"], default="none",
+                    help="contrast enhancement of the frames before segmentation (Cellpose) and tracking")
     ap.add_argument("--kw", type=json.loads, default={}, help="JSON kwargs for every backend")
     ap.add_argument("--tag", default="", help="suffix for the backend folder / method name")
     ap.add_argument("--point-radius", type=float, default=None,
@@ -116,18 +118,25 @@ def main():
         print(f"[{name}] skipped: {why}", flush=True)
 
     for ds_name in datasets:
-        out_ds = os.path.join(args.out, ds_name + (f"_first{args.limit}" if args.limit else ""))
+        ds_dir = os.path.basename(ds_name[4:].rstrip("/")) if ds_name.startswith("ctc:") else ds_name
+        out_ds = os.path.join(args.out, ds_dir + (f"_first{args.limit}" if args.limit else ""))
         rows = []
         try:
             seqs = iter_sequences(ds_name, limit=args.limit, max_seqs=args.max_seqs)
             for seq in seqs:
-                masks, provisional = masks_for(seq, out_ds, args.masks, args.masks_dir)
+                if args.preprocess != "none":
+                    from tracking.preprocess import enhance
+
+                    seq.imgs = enhance(seq.imgs, args.preprocess)
+                ptag = "" if args.preprocess == "none" else f"_{args.preprocess}"
+                masks, provisional = masks_for(seq, out_ds, args.masks, args.masks_dir, ptag)
                 print(f"[{ds_name}/{seq.name}] imgs {seq.imgs.shape}, masks {'provisional ' if provisional else ''}"
                       f"{masks.shape}, {seq.note}", flush=True)
                 for backend in args.backends:
-                    method = backend + (f"_{args.tag}" if args.tag else "")
+                    method = backend + (f"_{args.tag}" if args.tag else "") + ptag
                     row = {"dataset": ds_name, "seq": seq.name, "method": method, "frames": len(seq.imgs),
-                           "provisional_masks": provisional, "registered": args.register}
+                           "provisional_masks": provisional, "registered": args.register,
+                           "preprocess": args.preprocess}
                     try:
                         res = track(seq.imgs, masks, model=backend, register=args.register, **args.kw)
                     except Exception as e:

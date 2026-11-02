@@ -101,14 +101,9 @@ def point_metrics(res: CTCResult, points: pd.DataFrame, radius=10.0, div_tol=2) 
         div_precision_annot: among RES divisions of cells that hold a GT point at the
             mother's last frame, the fraction that are GT divisions there.
     """
-    pts = points.sort_values(["track", "t"]).reset_index(drop=True)
-    pts["track"] = pts["track"].astype(str)
-    pts["parent"] = pts["parent"].map(lambda p: "0" if _is_root(p) else str(p))
-    pts["res"] = match_points(res, pts, radius)
+    pts = _prepare_points(res, points, radius)  # duplicated (cell, frame) rows: first kept
     chain = chain_ids(res.tracks)
     pts["cell"] = pts["res"].map(lambda r: chain.get(int(r), 0) if r else 0)
-    # duplicated (cell, frame) rows are annotation noise: keep the first
-    pts = pts.drop_duplicates(["track", "t"]).reset_index(drop=True)
 
     pairs = ok = switches = 0
     complete, surv = [], []
@@ -129,7 +124,36 @@ def point_metrics(res: CTCResult, points: pd.DataFrame, radius=10.0, div_tol=2) 
         breaks = np.flatnonzero(~(consec & same))
         surv.append(((breaks[0] + 1) if len(breaks) else len(cell)) / len(cell) if cell[0] > 0 else 0.0)
 
-    # divisions
+    dv = _division_events(res, pts, div_tol)
+    return {
+        "gt_cells": int(pts["track"].nunique()),
+        "gt_points": int(len(pts)),
+        "det_recall": float((pts["res"] > 0).mean()) if len(pts) else np.nan,
+        "link_acc": ok / pairs if pairs else np.nan,
+        "id_switches": switches,
+        "completeness": float(np.mean(complete)) if complete else np.nan,
+        "survival": float(np.mean(surv)) if surv else np.nan,
+        "gt_divisions": dv["n_gt"],
+        "div_recall": len(dv["hit"]) / dv["n_gt"] if dv["n_gt"] else np.nan,
+        "div_precision_annot": len(dv["res_ok"]) / dv["n_res_annot"] if dv["n_res_annot"] else np.nan,
+    }
+
+
+
+def _prepare_points(res, points, radius):
+    pts = points.sort_values(["track", "t"]).reset_index(drop=True)
+    pts["track"] = pts["track"].astype(str)
+    pts["parent"] = pts["parent"].map(lambda p: "0" if _is_root(p) else str(p))
+    pts["res"] = match_points(res, pts, radius)
+    return pts.drop_duplicates(["track", "t"]).reset_index(drop=True)
+
+
+def _division_events(res: CTCResult, pts: pd.DataFrame, div_tol=2) -> dict:
+    """Match GT divisions to RES divisions (``pts`` from ``_prepare_points``).
+
+    Returns ``hit`` / ``missed``: GT divisions as (t, y, x) of the mother's last point;
+    ``res_ok`` / ``res_false``: RES mother track ids among the RES divisions whose
+    mother holds a GT point at its last frame (``n_res_annot`` of them)."""
     children = {}
     for i, (_, _, p) in res.tracks.items():
         if p:
@@ -144,52 +168,41 @@ def point_metrics(res: CTCResult, points: pd.DataFrame, radius=10.0, div_tol=2) 
             gt_div.setdefault(par, []).append(k)
     gt_div = {m: d for m, d in gt_div.items() if len(d) >= 2}
 
-    def mother_tracks(g):
-        """RES tracklets under the mother's last ``div_tol`` points."""
-        tail = g[g["t"] >= g["t"].max() - div_tol]
-        return {int(r) for r in tail["res"] if r}
+    def tail(g):  # RES tracklets under the mother's last div_tol points
+        return {int(r) for r in g[g["t"] >= g["t"].max() - div_tol]["res"] if r}
 
-    def daughter_tracks(g):
-        head = g[g["t"] <= g["t"].min() + div_tol]
-        return {int(r) for r in head["res"] if r}
+    def head(g):
+        return {int(r) for r in g[g["t"] <= g["t"].min() + div_tol]["res"] if r}
 
-    hit = 0
+    hit, missed = [], []
     for m, ds in gt_div.items():
-        mt = mother_tracks(by_track[m])
-        found = 0
-        for d in ds[:2]:
-            dt = daughter_tracks(by_track[d])
-            if any(res.tracks.get(r, (0, 0, 0))[2] in mt and res.tracks[r][2] in res_div for r in dt):
-                found += 1
-        hit += found == 2
-    # precision among annotated cells: RES divisions whose mother holds a GT point at its last frame
+        mt = tail(by_track[m])
+        found = sum(any(res.tracks.get(r, (0, 0, 0))[2] in mt and res.tracks[r][2] in res_div
+                        for r in head(by_track[d])) for d in ds[:2])
+        last = by_track[m].iloc[-1]
+        (hit if found == 2 else missed).append((int(last["t"]), float(last["y"]), float(last["x"])))
     gt_mother_last = {(int(by_track[m]["t"].max()), m) for m in gt_div}
     annotated_last = {}
     for r in pts.itertuples():
         if r.res:
             annotated_last.setdefault((int(r.t), int(r.res)), r.track)
-    n_res_div = n_res_div_ok = 0
+    res_ok, res_false = [], []
     for p in res_div:
         t_end = res.tracks[p][1]
         gt_cell = next((annotated_last[(t, p)] for t in range(t_end, t_end - div_tol - 1, -1)
                         if (t, p) in annotated_last), None)
         if gt_cell is None:
             continue
-        n_res_div += 1
-        n_res_div_ok += any(m == gt_cell and abs(tm - t_end) <= div_tol for tm, m in gt_mother_last)
+        ok = any(m == gt_cell and abs(tm - t_end) <= div_tol for tm, m in gt_mother_last)
+        (res_ok if ok else res_false).append(p)
+    return dict(n_gt=len(gt_div), hit=hit, missed=missed, res_ok=res_ok, res_false=res_false,
+                n_res_annot=len(res_ok) + len(res_false))
 
-    return {
-        "gt_cells": int(pts["track"].nunique()),
-        "gt_points": int(len(pts)),
-        "det_recall": float((pts["res"] > 0).mean()) if len(pts) else np.nan,
-        "link_acc": ok / pairs if pairs else np.nan,
-        "id_switches": switches,
-        "completeness": float(np.mean(complete)) if complete else np.nan,
-        "survival": float(np.mean(surv)) if surv else np.nan,
-        "gt_divisions": len(gt_div),
-        "div_recall": hit / len(gt_div) if gt_div else np.nan,
-        "div_precision_annot": n_res_div_ok / n_res_div if n_res_div else np.nan,
-    }
+
+def division_events(res: CTCResult, points: pd.DataFrame, radius=10.0, div_tol=2) -> dict:
+    """Which GT divisions were found / missed and which RES divisions are false
+    (see ``_division_events``); used by the lineage videos."""
+    return _division_events(res, _prepare_points(res, points, radius), div_tol)
 
 
 def ctc_gt_points(gt_dir) -> pd.DataFrame:

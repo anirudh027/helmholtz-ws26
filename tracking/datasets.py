@@ -222,6 +222,14 @@ def iter_sequences(dataset, limit=None, max_seqs=None, **kwargs) -> Iterator[Seq
     """Yield the sequences of ``dataset`` (one of ``ADAPTERS``)."""
     if dataset in NOT_TRACKABLE:
         raise ValueError(f"{dataset} is not trackable: {NOT_TRACKABLE[dataset]}")
+    if dataset.startswith("ctc:"):  # any CTC-layout folder, all its numbered sequences
+        root = dataset[4:]
+        seqs = sorted(d for d in os.listdir(root) if d.isdigit())
+        for i, seq in enumerate(ctc(root, seqs, os.path.basename(root.rstrip("/")), limit)):
+            if max_seqs is not None and i >= max_seqs:
+                return
+            yield seq
+        return
     if dataset not in ADAPTERS:
         raise ValueError(f"Unknown dataset {dataset!r}, choose from {list(ADAPTERS)}")
     for i, seq in enumerate(ADAPTERS[dataset](limit=limit, **kwargs)):
