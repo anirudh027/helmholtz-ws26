@@ -28,5 +28,6 @@ meet at the division.
 | `musc02_hoct_koft_tta.mp4` | MuSC 02 | |
 | `hela01_hoct_koft_tta.mp4`, `hela02_hoct_koft_tta.mp4` | Fluo-N2DL-HeLa, all 92 frames | many families, coloured per family |
 | `hsc02_hoct_koft.mp4` | BF-C2DL-HSC 02 | dense proliferation |
+| `alfi-dic03_hoct.mp4` vs `alfi-dic03_hoct_koft_tta.mp4`, same for `alfi-dic04_*` | ALFI-DIC 03 / 04 (not in HOCT's training data), GT masks, all 69 frames | TTA finds the divisions plain HOCT misses: 03 goes from 3 found / 2 missed to 5 / 0 (BC .75 → 1.0), 04 from 0 / 1 to 1 / 0 (BC 0 → 1.0) |
 | `hela01_hoct_koft_tta_short.gif` | HeLa 01, 60 frames | small GIF for Slack |
 | `helmholtz_red_256-329_*.mp4`, `helmholtz_red_66-109_*.mp4` | our timelapse, red reporter, Cellpose masks (recipe v2), stage-registered | most red × have a green + next to them a few frames later: the red mask of dim cells vanishes for > 3 frames (segmentation flicker, not linking). Frame 283 of the raw video (index 27 of the first window) is the 663-px stage jump: many cells leave the field there. `hoct_koft_tta_long` (gap filling across 8 frames) cuts track ends by 25% on 284-329 without changing divisions |
