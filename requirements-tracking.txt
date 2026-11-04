@@ -11,6 +11,7 @@ py-ctcmetrics==1.3.3
 tifffile
 networkx
 scikit-image
-opencv-python-headless
+opencv-python-headless  # Farneback optical flow (hoct_koft)
+matplotlib              # annotation sheets (scripts/correction_round.py)
 pandas
 tqdm
