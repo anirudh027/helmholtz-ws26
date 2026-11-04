@@ -4,15 +4,28 @@ PyTorch dataloaders for cell segmentation, plus adapters for segmentation models
 
 ## Setup
 
+One environment covers the dataloaders, Cellpose-SAM and all trackers. On the cluster (Linux, CUDA 12.8, Python 3.11):
+
 ```bash
-python -m venv .venv && source .venv/Scripts/activate   # Linux/macOS: .venv/bin/activate
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu134   # match your CUDA driver
-pip install -r requirements.txt
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-lock.txt   # exact versions, incl. torch 2.11.0+cu128 and Cellpose a54cb48
+pip install -e . --no-deps             # makes dataloaders/, models/, tracking/ importable from anywhere
 pre-commit install
 ```
 
-`requirements-lock.txt` pins the exact versions behind [RESULTS.md](RESULTS.md) (use it instead of
-`requirements.txt` to reproduce them).
+Elsewhere (other OS or CUDA version), install from the loose ranges in `pyproject.toml` instead, after installing
+torch for your platform: `pip install -e ".[seg,tracking,dev,notebooks]"`. Leave out extras you don't need.
+
+### Regenerating the lock
+
+`requirements-lock.txt` is generated from `pyproject.toml`; don't edit it by hand. After changing a dependency:
+
+```bash
+uv pip compile pyproject.toml --all-extras --python-version 3.11 --python-platform x86_64-manylinux_2_28 \
+  --extra-index-url https://download.pytorch.org/whl/cu128 --index-strategy unsafe-best-match --emit-index-url \
+  --override <(printf 'torch==2.11.0\ntorchvision==0.26.0\n') \
+  --custom-compile-command "see README: Regenerating the lock" -o requirements-lock.txt
+```
 
 ## Datasets
 
@@ -55,13 +68,14 @@ VS Code or Jupyter.
 ### Cellpose-SAM
 
 [Cellpose-SAM](https://github.com/MouseLand/cellpose) can be used with every dataset here that provides an instance
-mask, zero-shot or fine-tuned through a PyTorch `DataLoader` (`models/cellpose_sam.py`). Install it from a clone,
-which is gitignored:
+mask, zero-shot or fine-tuned through a PyTorch `DataLoader` (`models/cellpose_sam.py`). The lock (and the `seg`
+extra) installs it at commit `a54cb48`, the one behind RESULTS.md. To edit Cellpose itself, use a clone instead
+(gitignored):
 
 ```bash
 git clone https://github.com/MouseLand/cellpose.git
-git -C cellpose checkout a54cb48   # the commit behind RESULTS.md
-pip install -e ./cellpose --config-settings editable_mode=compat   # compat: the folder must not shadow the package
+git -C cellpose checkout a54cb48
+pip install -e ./cellpose --no-deps --config-settings editable_mode=compat   # compat: the folder must not shadow the package
 ```
 
 ```python
