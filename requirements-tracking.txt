@@ -1,0 +1,16 @@
+# Unified tracking module (tracking/). Shared env on the server: /mnt/1t/conda_envs/tracking
+# (built by /mnt/1t/conda_envs/setup_tracking_env.sh). Versions follow Damià's Cell-project pins.
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.11.0
+torchvision==0.26.0
+trackastra==0.5.5
+ultrack==0.8.0
+laptrack==0.17.1
+hoct==0.2.0
+py-ctcmetrics==1.3.3
+tifffile
+networkx
+scikit-image
+opencv-python-headless
+pandas
+tqdm
