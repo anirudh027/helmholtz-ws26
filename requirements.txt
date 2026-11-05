@@ -1,0 +1,17 @@
+# Install torch first with CUDA, e.g.: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu134
+torch>=2.3
+numpy>=1.26
+tifffile>=2024.2.12
+pillow>=10.0
+scipy>=1.11
+opencv-python-headless>=4.8
+openpyxl>=3.1
+
+# Development
+pre-commit>=4.0
+ruff>=0.6
+mypy>=1.11
+
+# Notebooks
+matplotlib>=3.8
+ipykernel>=6.29
