@@ -62,9 +62,7 @@ def write_ctc(out_dir, masks, tracks: Tracks):
         os.remove(f)
     ndigits = max(3, len(str(len(masks) - 1)))
     for t, m in enumerate(masks):
-        tifffile.imwrite(
-            os.path.join(out_dir, f"mask{t:0{ndigits}d}.tif"),
-            m.astype(np.uint16), compression="zlib")
+        tifffile.imwrite(os.path.join(out_dir, f"mask{t:0{ndigits}d}.tif"), m.astype(np.uint16), compression="zlib")
     with open(os.path.join(out_dir, "res_track.txt"), "w") as fh:
         for tid in sorted(tracks):
             t0, t1, parent = tracks[tid]
@@ -99,10 +97,9 @@ def write_ctc_input(ds_dir, seq, imgs, masks):
     os.makedirs(img_dir, exist_ok=True)
     os.makedirs(seg_dir, exist_ok=True)
     ndigits = max(3, len(str(len(imgs) - 1)))
-    for t, (img, m) in enumerate(zip(imgs, masks)):
+    for t, (img, m) in enumerate(zip(imgs, masks, strict=True)):
         tifffile.imwrite(os.path.join(img_dir, f"t{t:0{ndigits}d}.tif"), img)
-        tifffile.imwrite(os.path.join(seg_dir, f"man_seg{t:0{ndigits}d}.tif"),
-                         m.astype(np.uint16), compression="zlib")
+        tifffile.imwrite(os.path.join(seg_dir, f"man_seg{t:0{ndigits}d}.tif"), m.astype(np.uint16), compression="zlib")
 
 
 def centroids_of(mask):
@@ -110,7 +107,7 @@ def centroids_of(mask):
     labels = np.unique(mask)
     labels = labels[labels > 0]
     cents = ndi.center_of_mass(mask > 0, mask, labels)
-    return {int(lbl): c for lbl, c in zip(labels, cents)}
+    return {int(lbl): c for lbl, c in zip(labels, cents, strict=True)}
 
 
 def tracks_from_assignment(masks, frame_label_to_track, edges):
@@ -121,14 +118,14 @@ def tracks_from_assignment(masks, frame_label_to_track, edges):
     later tracklet of the same track gets the previous one as parent.
     """
     T = len(masks)
-    frames_of = {}
+    frames_of: dict[int, list[int]] = {}
     for t in range(T):
         for _, tid in frame_label_to_track[t].items():
             frames_of.setdefault(tid, []).append(t)
 
     new_id = 1
-    runs = {}  # new_id -> (t0, t1, orig_tid, prev_run_new_id)
-    orig_to_new_at = {}  # (orig_tid, t) -> new_id
+    runs: dict[int, tuple[int, int, int, int | None]] = {}  # new_id -> (t0, t1, orig_tid, prev_run_new_id)
+    orig_to_new_at: dict[tuple[int, int], int] = {}  # (orig_tid, t) -> new_id
     for tid in sorted(frames_of):
         fs = sorted(set(frames_of[tid]))
         run_start = prev_f = fs[0]
@@ -164,7 +161,7 @@ def tracks_from_assignment(masks, frame_label_to_track, edges):
     for t in range(T):
         m = masks[t]
         for lbl, tid in frame_label_to_track[t].items():
-            nid = orig_to_new_at.get((tid, t))
+            nid = orig_to_new_at.get((tid, t), 0)  # ids start at 1, so 0 means absent
             if nid:
                 relabeled[t][m == lbl] = nid
     return CTCResult(relabeled, tracks)

@@ -9,7 +9,7 @@ this module groups their samples into whole sequences of shape (T, Y, X).
 
 import glob
 import os
-from collections.abc import Iterator
+from collections.abc import Hashable, Iterator
 from dataclasses import dataclass
 
 import numpy as np
@@ -40,7 +40,7 @@ NOT_TRACKABLE = {
 
 def _from_loader(dataset, ds, key, name_of, limit, masks_from="target", note=""):
     """Group a frame-level loader's samples into sequences (frames in loader order)."""
-    by_seq = {}
+    by_seq: dict[Hashable, list[int]] = {}
     for i, s in enumerate(ds.samples):
         by_seq.setdefault(key(s), []).append(i)
     for k, idxs in by_seq.items():
@@ -58,42 +58,71 @@ def musc(limit=None, seqs=("01", "02")):
     for seq in seqs:
         imgs, masks = load_sequence(root, seq, limit)
         gt = os.path.join(root, f"{seq}_GT")
-        yield Sequence("musc", seq, imgs.astype(np.float32), masks.astype(np.int32),
-                       gt_dir=None if limit else gt, note="CTC silver-truth masks")
+        yield Sequence(
+            "musc",
+            seq,
+            imgs.astype(np.float32),
+            masks.astype(np.int32),
+            gt_dir=None if limit else gt,
+            note="CTC silver-truth masks",
+        )
 
 
 def alfi(limit=None, root=None):
     from dataloaders.alfi_dataset import ALFIDataset
 
     ds = ALFIDataset(root or os.path.join(DATA_ROOT, "alfi"), annotation="dtl")
-    yield from _from_loader("alfi", ds, key=lambda s: s[0], name_of=str, limit=limit,
-                            note="nucleus masks (MI sequences), connected components")
+    yield from _from_loader(
+        "alfi",
+        ds,
+        key=lambda s: s[0],
+        name_of=str,
+        limit=limit,
+        note="nucleus masks (MI sequences), connected components",
+    )
 
 
 def qpi_cell_death(limit=None, root=None, cell_lines=("LNCaP",)):
     from dataloaders.qpi_cell_death_dataset import QPICellDeathDataset
 
     ds = QPICellDeathDataset(root or os.path.join(DATA_ROOT, "qpi_cell_death"), cell_lines=cell_lines)
-    yield from _from_loader("qpi_cell_death", ds, key=lambda s: s[0],
-                            name_of=lambda k: "_".join(map(str, ds.sequences[k])), limit=limit,
-                            note="sparse masks: only annotated cells are tracked")
+    yield from _from_loader(
+        "qpi_cell_death",
+        ds,
+        key=lambda s: s[0],
+        name_of=lambda k: "_".join(map(str, ds.sequences[k])),
+        limit=limit,
+        note="sparse masks: only annotated cells are tracked",
+    )
 
 
 def c2c12(limit=None, root=None):
     from dataloaders.c2c12_dataset import C2C12Dataset
 
     ds = C2C12Dataset(root or os.path.join(DATA_ROOT, "c2c12"), annotation="computer", target="instance")
-    yield from _from_loader("c2c12", ds, key=lambda s: s[0],
-                            name_of=lambda k: "_".join(ds.sequences[k]), limit=limit,
-                            note="disk masks around annotated centroids (weak labels)")
+    yield from _from_loader(
+        "c2c12",
+        ds,
+        key=lambda s: s[0],
+        name_of=lambda k: "_".join(ds.sequences[k]),
+        limit=limit,
+        note="disk masks around annotated centroids (weak labels)",
+    )
 
 
 def hemato_fate(limit=None, root=None):
     from dataloaders.hemato_fate_dataset import HematoFateDataset
 
     ds = HematoFateDataset(root or os.path.join(DATA_ROOT, "hemato_fate"))
-    yield from _from_loader("hemato_fate", ds, key=lambda s: s[0], name_of=lambda k: f"pos{k}",
-                            limit=limit, masks_from=None, note="no masks shipped")
+    yield from _from_loader(
+        "hemato_fate",
+        ds,
+        key=lambda s: s[0],
+        name_of=lambda k: f"pos{k}",
+        limit=limit,
+        masks_from=None,
+        note="no masks shipped",
+    )
 
 
 def helmholtz(limit=None, root="/mnt/1t/Timelapse/Brightfield_Normalized_TIFF"):

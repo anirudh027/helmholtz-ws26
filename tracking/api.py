@@ -10,6 +10,7 @@ Registry design from Nikolas Rieger's tracking.py (feat/tracking-trackastra).
 """
 
 import time
+from collections.abc import Callable
 from functools import partial
 
 import numpy as np
@@ -18,7 +19,7 @@ from . import backends
 from .ctc import CTCResult
 
 # name -> function(imgs, masks, **kwargs) -> CTCResult
-TRACKERS = {
+TRACKERS: dict[str, Callable[..., CTCResult]] = {
     "trackastra": partial(backends.track_trackastra, mode="greedy"),
     "trackastra_ilp": partial(backends.track_trackastra, mode="ilp"),
     "laptrack": backends.track_laptrack,

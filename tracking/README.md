@@ -3,9 +3,9 @@
 ```python
 from tracking import track, write_ctc
 
-res = track(imgs, masks, model="hoct")   # imgs, masks: (T, Y, X); masks = instance segmentation
-graph, masks_tracked = res               # detection-level nx.DiGraph + track-id masks
-res.tracks                               # {track_id: (t_start, t_end, parent_id)}  (CTC lineage)
+res = track(imgs, masks, model="hoct")  # imgs, masks: (T, Y, X); masks = instance segmentation
+graph, masks_tracked = res  # detection-level nx.DiGraph + track-id masks
+res.tracks  # {track_id: (t_start, t_end, parent_id)}  (CTC lineage)
 write_ctc("out/01_RES", res.masks, res.tracks)
 ```
 

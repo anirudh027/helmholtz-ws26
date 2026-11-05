@@ -12,6 +12,7 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -43,7 +44,7 @@ def _device(device):
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-_TRACKASTRA_MODELS = {}
+_TRACKASTRA_MODELS: dict[tuple[str, str], Any] = {}  # (pretrained, device) -> loaded model
 
 
 def track_trackastra(imgs, masks, mode="greedy", pretrained="general_2d", device="automatic", **kwargs):
@@ -80,10 +81,11 @@ def track_laptrack(imgs, masks, max_distance=40.0):
         merging_cost_cutoff=False,
     )
     track_df, split_df, _ = lt.predict_dataframe(
-        spots, coordinate_cols=["y", "x"], frame_col="frame", only_coordinate_cols=False)
+        spots, coordinate_cols=["y", "x"], frame_col="frame", only_coordinate_cols=False
+    )
     track_df = track_df.reset_index()
 
-    frame_map = [dict() for _ in masks]
+    frame_map: list[dict[int, int]] = [{} for _ in masks]
     for r in track_df.itertuples(index=False):
         frame_map[int(r.frame)][int(r.label)] = int(r.track_id) + 1
     edges = {int(r.child_track_id) + 1: int(r.parent_track_id) + 1 for r in split_df.itertuples(index=False)}
@@ -137,4 +139,5 @@ def track_hoct_koft(imgs, masks, **kwargs):
     """HOCT + KOFT-style optical-flow gap filling (Damià's hybrid, #1 in his benchmark)."""
     raise NotImplementedError(
         "hoct_koft is pending: waiting for Damià to push his hybrid into helmholtz-ws26 "
-        "(Cell-project/scripts/run_hybrid.py). Use model='hoct' meanwhile.")
+        "(Cell-project/scripts/run_hybrid.py). Use model='hoct' meanwhile."
+    )

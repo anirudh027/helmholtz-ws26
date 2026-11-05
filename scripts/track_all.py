@@ -59,11 +59,19 @@ def main():
             seqs = iter_sequences(ds_name, limit=args.limit, max_seqs=args.max_seqs)
             for seq in seqs:
                 masks, provisional = masks_for(seq, out_ds)
-                print(f"[{ds_name}/{seq.name}] imgs {seq.imgs.shape}, masks {'provisional ' if provisional else ''}"
-                      f"{masks.shape}, {seq.note}", flush=True)
+                print(
+                    f"[{ds_name}/{seq.name}] imgs {seq.imgs.shape}, masks {'provisional ' if provisional else ''}"
+                    f"{masks.shape}, {seq.note}",
+                    flush=True,
+                )
                 for backend in args.backends:
-                    row = {"dataset": ds_name, "seq": seq.name, "method": backend, "frames": len(seq.imgs),
-                           "provisional_masks": provisional}
+                    row = {
+                        "dataset": ds_name,
+                        "seq": seq.name,
+                        "method": backend,
+                        "frames": len(seq.imgs),
+                        "provisional_masks": provisional,
+                    }
                     try:
                         res = track(seq.imgs, masks, model=backend)
                     except Exception as e:
