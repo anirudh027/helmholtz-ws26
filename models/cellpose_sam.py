@@ -1,6 +1,6 @@
-"""Train Cellpose-SAM (https://github.com/MouseLand/cellpose) from a PyTorch DataLoader.
+"""Segment with Cellpose-SAM (https://github.com/MouseLand/cellpose), saving the masks, or train it from a DataLoader.
 
-Works with any dataset whose samples hold ``"image"`` [C, H, W] and an instance mask ``"target"`` [H, W].
+Training works with any dataset whose samples hold ``"image"`` [C, H, W] and an instance mask ``"target"`` [H, W].
 """
 
 from __future__ import annotations
@@ -10,11 +10,33 @@ from pathlib import Path
 
 import fastremap
 import numpy as np
+import tifffile
 import torch
 from cellpose import dynamics, transforms
 from cellpose.train import _loss_fn_seg
 from torch.utils.checkpoint import checkpoint
 from torch.utils.data import DataLoader
+
+
+def segment(model, image: np.ndarray, path: str | Path, pad: int = 0, **kwargs) -> np.ndarray:
+    """``model.eval(image, **kwargs)`` masks, saved to ``path`` (zlib TIFF); if ``path`` exists it is loaded instead.
+
+    Loading makes interrupted runs resume where they stopped. ``pad`` > 0 reflect-pads the last two image axes
+    before segmentation (small images) and crops the masks back.
+    """
+    path = Path(path)
+    if path.exists():
+        return tifffile.imread(path)
+    if pad:
+        image = np.pad(image, [(0, 0)] * (image.ndim - 2) + [(pad, pad)] * 2, mode="reflect")
+    masks = model.eval(image, **kwargs)[0]
+    if pad:
+        masks = masks[..., pad:-pad, pad:-pad]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")  # an interrupted write leaves no truncated mask behind
+    tifffile.imwrite(tmp, masks, compression="zlib")
+    tmp.replace(path)
+    return masks
 
 
 class CellposeTransform:

@@ -1,5 +1,5 @@
-# Exact versions used for RESULTS.md (Windows 11, Python 3.11.4, RTX 3070). Install torch/torchvision first from
-# https://download.pytorch.org/whl/cu134, then: pip install -r requirements-lock.txt; Cellpose: see README (pinned commit).
+# Exact versions used for RESULTS.md (Windows 11, Python 3.11.4, RTX 3070). Install torch==2.15.0 and torchvision
+# first from the CUDA index (README), then: pip install -r requirements-lock.txt; Cellpose: see README (pinned commit).
 albucore==0.0.24
 albumentations==2.0.8
 annotated-types==0.8.0

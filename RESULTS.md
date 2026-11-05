@@ -6,11 +6,33 @@ track points); each section says what is scored.
 
 ## Reproduce
 
-1. Environment (see [README](README.md#setup)): `pip install -r requirements-lock.txt` for the exact versions used
-   here, after installing torch from the CUDA index; Cellpose from the pinned clone.
-2. Data: `bash dataloaders/download_<dataset>.sh <root>` (sizes in the README table).
-3. Run: `python examples/<dataset>_cellpose_sam.py <root>`; the command per dataset is listed below. Results are
-   printed to stdout.
+1. Environment: the [README setup](README.md#setup), with `pip install -r requirements-lock.txt` for the exact
+   versions used here.
+2. Data and run, per dataset (`data/` and `runs/` are gitignored):
+
+```bash
+bash dataloaders/download_xenopus.sh data/xenopus
+python examples/xenopus_cellpose_sam.py data/xenopus runs/cellpose_sam/xenopus
+bash dataloaders/download_alfi.sh data/alfi
+python examples/alfi_cellpose_sam.py data/alfi runs/cellpose_sam/alfi
+bash dataloaders/download_celldetective.sh data/celldetective
+python examples/celldetective_cellpose_sam.py data/celldetective runs/cellpose_sam/celldetective
+bash dataloaders/download_hemato_fate.sh data/hemato_fate
+python examples/hemato_fate_cellpose_sam.py data/hemato_fate runs/cellpose_sam/hemato_fate
+DRYAD_TOKEN=<token> bash dataloaders/download_p53_fate.sh data/p53_fate   # token: https://datadryad.org/account
+python examples/p53_fate_cellpose_sam.py data/p53_fate runs/cellpose_sam/p53_fate
+bash dataloaders/download_c2c12.sh data/c2c12 '090303.*(F0009|Annotation)'   # only what is scored
+python examples/c2c12_cellpose_sam.py data/c2c12 runs/cellpose_sam/c2c12
+bash dataloaders/download_cellx_predict.sh data/cellx_predict
+python examples/cellx_cellpose_sam.py data/cellx_predict runs/cellpose_sam/cellx
+bash dataloaders/download_qpi_cell_death.sh data/qpi_cell_death
+python examples/qpi_cellpose_sam.py data/qpi_cell_death runs/cellpose_sam/qpi
+```
+
+Each script shows a progress bar, prints its metrics and saves the predicted masks as zlib-compressed TIFFs (uint16
+instance labels, 0 = background) to the output directory; the file layout is in the script's docstring. Masks that
+already exist are loaded instead of recomputed, so an interrupted run resumes where it stopped (delete the output
+directory to start over).
 
 Environment of the runs below: Windows 11, Python 3.11.4, torch 2.15.0+cu134, NVIDIA RTX 3070 (8 GB),
 Cellpose 4.2.1.1 at commit `a54cb48`, model `cpsam_v2`. Runtimes are wall-clock; runs marked "shared GPU" overlapped
@@ -33,9 +55,9 @@ Not evaluated: the Xenopus time-lapses (S-BIAD2969, 35-64 GB each, not downloade
 
 ## Xenopus
 
-`python examples/xenopus_cellpose_sam.py D:/datasets/xenopus`. Each z-slice of the 0h / 10h / 20h stacks against the
-slice of the authors' 3D labels; the matching channel alone is the input (membrane for cells, nuclei for nuclei).
-The reference labels come from the authors' Cellpose / StarDist models, not from manual annotation.
+Each z-slice of the 0h / 10h / 20h stacks against the slice of the authors' 3D labels; the matching channel alone is
+the input (membrane for cells, nuclei for nuclei). The reference labels come from the authors' Cellpose / StarDist
+models, not from manual annotation.
 
 | Target | precision @0.5 | recall @0.5 |
 | --- | --- | --- |
@@ -44,10 +66,9 @@ The reference labels come from the authors' Cellpose / StarDist models, not from
 
 ## ALFI
 
-`python examples/alfi_cellpose_sam.py D:/datasets/alfi`. The masks outline nuclei (whole cells only in mitosis) while
-Cellpose-SAM segments whole cells, so detection is scored like C2C12: a predicted mask is correct if it contains the
-centroid of an annotated cell. IoU against the nucleus masks is reported as well. Precision is understated a little:
-cells cut by the image border are often not annotated.
+The masks outline nuclei (whole cells only in mitosis) while Cellpose-SAM segments whole cells, so detection is scored
+like C2C12: a predicted mask is correct if it contains the centroid of an annotated cell. IoU against the nucleus
+masks is reported as well. Precision is understated a little: cells cut by the image border are often not annotated.
 
 | Sequence | precision | recall | recall @0.5 IoU | mean IoU |
 | --- | --- | --- | --- | --- |
@@ -62,8 +83,8 @@ cells cut by the image border are often not annotated.
 
 ## Celldetective
 
-`python examples/celldetective_cellpose_sam.py D:/datasets/celldetective`. Best IoU of every annotated cell; only one
-population is annotated per set, so precision is not meaningful. Input channels per set are in the script.
+Best IoU of every annotated cell; only one population is annotated per set, so precision is not meaningful. Input
+channels per set are in the script.
 
 | Set | recall @0.5 | mean IoU | annotated cells | predicted masks | images |
 | --- | --- | --- | --- | --- | --- |
@@ -73,9 +94,9 @@ population is annotated per set, so precision is not meaningful. Input channels 
 
 ## HematoFatePrediction
 
-`python examples/hemato_fate_cellpose_sam.py D:/datasets/hemato_fate`. There are no masks, only the manual track
-points of 2 cells, which can be ~20 px off the cell centre. A point counts as a hit if a predicted mask lies within
-10 px of it. Every frame with a track point is evaluated (bright-field, raw 8-bit scaled to [0, 1]).
+There are no masks, only the manual track points of 2 cells, which can be ~20 px off the cell centre. A point counts
+as a hit if a predicted mask lies within 10 px of it. Every frame with a track point is evaluated (bright-field, raw
+8-bit scaled to [0, 1]).
 
 | Track points | Frames | hit rate | masks / frame |
 | --- | --- | --- | --- |
@@ -83,11 +104,9 @@ points of 2 cells, which can be ~20 px off the cell centre. A point counts as a 
 
 ## p53 cell fate
 
-`python examples/p53_fate_cellpose_sam.py D:/datasets/p53_fate` (the download needs a Dryad API token:
-`DRYAD_TOKEN=<token> bash dataloaders/download_p53_fate.sh D:/datasets/p53_fate`, token from
-https://datadryad.org/account, valid 10 h). All 8 lineage tables on Dryad are the same file, and its points and lineage
-numbers match the MNNG1 video only, so only MNNG1 is scored: a track point is a hit if a mask lies within 5 px of it
-(points outside the video crop, 0.2%, are skipped). The videos are the authors' tracking output with crosses and
+The download needs a Dryad API token (valid 10 h). All 8 lineage tables on Dryad are the same file, and its points and
+lineage numbers match the MNNG1 video only, so only MNNG1 is scored: a track point is a hit if a mask lies within 5 px
+of it (points outside the video crop, 0.2%, are skipped). The videos are the authors' tracking output with crosses and
 lineage numbers burned in (converted to greyscale). Zero-shot Cellpose-SAM fails on them: masks are mostly small
 (median 45 px) and 64% of them lie on the burned-in overlay (checked on frame 201), while the large, flat cells are
 rarely segmented.
@@ -98,8 +117,8 @@ rarely segmented.
 
 ## C2C12
 
-`python examples/c2c12_cellpose_sam.py D:/datasets/c2c12`. C2C12 has centroids only: a predicted mask is correct if it
-contains an annotated centroid (the human "full" annotation of field F0009, the first 800 frames of 090303).
+C2C12 has centroids only: a predicted mask is correct if it contains an annotated centroid (the human "full"
+annotation of field F0009, the first 800 frames of 090303).
 
 | Frames | Annotated cells | precision | recall |
 | --- | --- | --- | --- |
