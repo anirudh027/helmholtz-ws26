@@ -1,6 +1,8 @@
 """Cellpose-SAM zero-shot on the Celldetective segmentation sets, per set, against the instance masks.
 
-python examples/celldetective_cellpose_sam.py <data root> [sets, default: all]
+Masks are saved to <output dir>/<set>/<image name>.tif.
+
+python examples/celldetective_cellpose_sam.py <data root> <output dir> [sets, default: all]
 """
 
 import sys
@@ -10,9 +12,11 @@ import numpy as np
 from cellpose import models
 from cellpose.metrics import _intersection_over_union
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dataloaders.celldetective_dataset import SUBSETS, CelldetectiveDataset  # noqa: E402
+from models.cellpose_sam import segment  # noqa: E402
 
 CHANNELS = {  # up to 3 channels that show the annotated population (Cellpose-SAM takes 3)
     "db_mcf7_nuclei_w_lymphocytes": ("live_nuclei_channel", "dead_nuclei_channel"),
@@ -21,14 +25,14 @@ CHANNELS = {  # up to 3 channels that show the annotated population (Cellpose-SA
 }
 
 if __name__ == "__main__":
-    root, subsets = sys.argv[1], sys.argv[2:] or SUBSETS
+    root, out, subsets = sys.argv[1], Path(sys.argv[2]), sys.argv[3:] or SUBSETS
     model = models.CellposeModel(gpu=True)  # cpsam_v2
     for subset in subsets:
         ds = CelldetectiveDataset(root, subset, channels=CHANNELS[subset])
         ious, n_pred = [], 0  # best IoU of every annotated cell (only one population is annotated: no precision)
-        for sample in DataLoader(ds, batch_size=None, num_workers=2):
+        for sample in tqdm(DataLoader(ds, batch_size=None, num_workers=2), desc=subset):
             true = sample["target"].numpy()
-            pred = model.eval(sample["image"].numpy(), channel_axis=0)[0]
+            pred = segment(model, sample["image"].numpy(), out / subset / sample["name"], channel_axis=0)
             n_pred += int(pred.max())
             iou = _intersection_over_union(true, pred)[1:, 1:]
             ious += iou.max(1, initial=0)[np.unique(true[true > 0]) - 1].tolist()
