@@ -26,6 +26,8 @@ pre-commit install
 | [Celldetective](https://doi.org/10.5281/zenodo.17068651) fluorescence / bright-field / RICM images of NK cells and MCF-7 co-cultures, 3 instance-mask sets | `dataloaders/celldetective_dataset.py` | `dataloaders/download_celldetective.sh` (1.5 GB) |
 | [Xenopus mucociliary epithelium](https://doi.org/10.6019/S-BSST2777) 3 confocal stacks (membrane / nuclei), 3D segmentations of all cells | `dataloaders/xenopus_dataset.py` | `dataloaders/download_xenopus.sh` (3.8 GB zip) |
 | [p53 cell fate](https://doi.org/10.5061/dryad.pk0p2ngp5) 8 DIC-like tracking videos (p53 / p53 RNAi, +- MNNG) with burned-in track overlays, cell-lineage tracks for MNNG1 only (no masks) | `dataloaders/p53_fate_dataset.py` | `dataloaders/download_p53_fate.sh` (330 MB, needs `DRYAD_TOKEN`) |
+| [Leger RPE1 Fucci](https://zenodo.org/records/14987478) 64 x 64 bright-field + H2B crops of mitosis-to-mitosis tracks, per-frame Geminin / Cdt1 Fucci targets (no masks) | `dataloaders/leger_fucci_dataset.py` | `dataloaders/download_leger_fucci.sh` (1.7 GB test sets, +16.6 GB train) |
+| [Singh iPSC reprogramming](https://github.com/abhineet123/ipsc_prediction) 31 ROIs x 127 frames of one well, tracked colony instance masks with fate labels (iPSC / differentiated) | `dataloaders/singh_ipsc_dataset.py` | `dataloaders/download_singh_ipsc.sh` (5.3 GB zip) |
 
 Samples are dicts with `"image"` [C, H, W]; C2C12 adds `"target"` (`target="instance"` gives an int64 [H, W]
 instance mask). cellX-predict has `subset="patches"` (96k unlabelled crops) and `subset="glimpses"` (frames of 20
@@ -45,6 +47,12 @@ fetched.
 p53 cell fate gives greyscale frames of 8 conditions x 401 frames (10 min apart, sizes differ per condition: one
 condition per batch, `p53_collate`). All 8 Dryad lineage tables are the same file, and it matches the MNNG1 video,
 so only MNNG1 samples add `"points"` [K, 2] (x, y) with `"cell"`, `"lineage"` and `"event"` codes (`EVENTS`).
+Leger RPE1 Fucci gives z-scored [2, 64, 64] crops (bright-field, H2B) with `"fucci"` [2] (Geminin, Cdt1 in [0, 1]);
+`seq_len=k` returns non-overlapping [k, 2, 64, 64] windows and `seq_len=-1` whole tracks (`leger_collate`). `split` is
+`"train"`, `"test"` or `"test_drugged"` (Palbociclib, out of distribution); tracks are memory-mapped.
+Singh iPSC gives greyscale ROI frames (1700 x 900 to 4333 x 3833: one ROI per batch, `singh_collate`) with a colony
+instance `"target"`, `"boxes"`, `"labels"` (`ipsc` / `diff`; `classes` adds `cell`) and track `"ids"` stable across
+the 127 frames; `frames=range(54)` is the authors' early stage.
 
 `notebooks/visualize_batches.ipynb` plots 2 batches of every loader (set the data roots in its first cell).
 Register the venv as a kernel once (`python -m ipykernel install --user --name helmholtz-ws26`), then pick it in
