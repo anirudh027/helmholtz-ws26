@@ -1,32 +1,33 @@
-"""Cellpose-SAM zero-shot on the ALFI MI sequences, per sequence, against the DTL instance masks.
+"""Cellpose-SAM / SAM2 zero-shot on the ALFI MI sequences, per sequence, against the DTL instance masks.
 
 The masks outline nuclei (whole cells only in mitosis) while Cellpose-SAM segments cells, so detection is scored like
 C2C12: a predicted mask is correct if it contains the centroid of an annotated cell. Mask IoU is reported as well.
 
-python examples/alfi_cellpose_sam.py <data root> [sequences, default: MI01-MI08]
+python examples/alfi_zero_shot.py <data root> [sequences, default: MI01-MI08] [--model cpsam|sam2] [--every n]
 """
 
 import sys
 from pathlib import Path
 
 import numpy as np
-from cellpose import models
 from cellpose.metrics import _intersection_over_union
 from scipy import ndimage  # type: ignore[import-untyped,unused-ignore]
 from torch.utils.data import DataLoader
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dataloaders.alfi_dataset import ALFIDataset, alfi_collate  # noqa: E402
+from models.segmenters import every_nth, load_segmenter, parse_options  # noqa: E402
 
 if __name__ == "__main__":
+    model_name, every, sys.argv[1:] = parse_options(sys.argv[1:])  # --model cpsam|sam2, --every n
     root, sequences = sys.argv[1], sys.argv[2:] or [f"MI{i:02d}" for i in range(1, 9)]
-    model = models.CellposeModel(gpu=True)  # cpsam_v2
+    segment = load_segmenter(model_name)
     for seq in sequences:
-        ds = ALFIDataset(root, [seq], annotation="dtl")
+        ds = every_nth(ALFIDataset(root, [seq], annotation="dtl"), every)
         tp = n_pred = 0
         ious = []  # best IoU of every annotated cell in every frame
         for batch in DataLoader(ds, batch_size=4, num_workers=2, collate_fn=alfi_collate):
-            masks = model.eval(list(batch["image"][:, 0].numpy()))[0]
+            masks = segment(list(batch["image"][:, 0].numpy()))
             for true, pred in zip(batch["target"].numpy(), masks, strict=True):
                 centroids = ndimage.center_of_mass(true > 0, true, range(1, true.max() + 1))
                 y, x = np.round(np.reshape(centroids, (-1, 2))).astype(int).T

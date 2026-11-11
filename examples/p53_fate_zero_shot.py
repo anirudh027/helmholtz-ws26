@@ -1,28 +1,29 @@
-"""Cellpose-SAM zero-shot on the p53 cell-fate videos: are the tracked cells segmented?
+"""Cellpose-SAM / SAM2 zero-shot on the p53 cell-fate videos: are the tracked cells segmented?
 
 Only MNNG1 has a matching lineage table (see ``dataloaders/p53_fate_dataset.py``), so all 401 MNNG1 frames are scored.
-python examples/p53_fate_cellpose_sam.py <data root>
+python examples/p53_fate_zero_shot.py <data root> [--model cpsam|sam2] [--every n]
 """
 
 import sys
 from pathlib import Path
 
 import numpy as np
-from cellpose import models
 from torch.utils.data import DataLoader
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dataloaders.p53_fate_dataset import ANNOTATED, P53FateDataset, p53_collate  # noqa: E402
+from models.segmenters import every_nth, load_segmenter, parse_options  # noqa: E402
 
 R = 5  # count a hit if a mask lies within R px of the track point (R = 0: the point itself)
 
 if __name__ == "__main__":
+    model_name, every, sys.argv[1:] = parse_options(sys.argv[1:])  # --model cpsam|sam2, --every n
     root = sys.argv[1]
-    model = models.CellposeModel(gpu=True)  # cpsam_v2
-    ds = P53FateDataset(root, conditions=[ANNOTATED])
+    segment = load_segmenter(model_name)
+    ds = every_nth(P53FateDataset(root, conditions=[ANNOTATED]), every)
     hits, exact, n_points, n_masks, n_hit_masks = [], [], 0, 0, 0
     for batch in DataLoader(ds, batch_size=4, num_workers=2, collate_fn=p53_collate):
-        masks = model.eval(list(batch["image"][:, 0].numpy()))[0]
+        masks = segment(list(batch["image"][:, 0].numpy()))
         for mask, points in zip(masks, batch["points"], strict=True):
             h, w = mask.shape
             xy = points.numpy().round().astype(int)

@@ -18,7 +18,7 @@ Dataset facts (verified against the files)
   frames). ``test_drugged``: 73 tracks (Palbociclib-treated, out of distribution) of 0304 / 0305, 271-601 frames
   (mean 457, 33,365 frames). ``train`` (5,188 tracks, mean ~230 frames per the paper) was not downloaded here.
 * There are no segmentation masks; Cellpose-SAM can be used zero-shot on the H2B channel
-  (see ``examples/leger_fucci_cellpose_sam.py``).
+  (see ``examples/leger_fucci_zero_shot.py``).
 
 Expected directory layout (what ``download_leger_fucci.sh`` produces)::
 

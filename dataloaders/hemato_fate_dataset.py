@@ -16,7 +16,7 @@ Dataset facts (verified against the files)
   cell 82 (pos 54, t 3055-3451, GATA1+ throughout, ``type`` 1 = MEP lineage) and cell 96 (pos 54, t 2685-3097
   with gaps, and pos 55, t 3008-3039 where the fields overlap; ``type`` 0 = no marker, ``invtype_alt`` 2, likely
   the GMP lineage inferred from its progeny). Track points can be ~20 px off the cell centre.
-* There are no segmentation masks; Cellpose-SAM can be used zero-shot (see ``examples/hemato_fate_cellpose_sam.py``).
+* There are no segmentation masks; Cellpose-SAM can be used zero-shot (see ``examples/hemato_fate_zero_shot.py``).
 
 Expected directory layout (what ``download_hemato_fate.sh`` produces)::
 

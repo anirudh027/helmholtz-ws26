@@ -84,4 +84,22 @@ train_cellpose(model, loader, n_epochs=100, save_path="runs/cpsam_c2c12")
 Fine-tuning at batch size 4 uses 6.6 GB of GPU memory on an RTX 3070 (8 GB), thanks to gradient checkpointing.
 C2C12 masks are disks drawn around centroids, so fine-tuning on them teaches round cells: use them as weak labels.
 
+### SAM2
+
+[SAM2](https://github.com/facebookresearch/sam2) (SAM2.1 Hiera-L) is used zero-shot through its automatic mask
+generator (`models/sam2.py`): images are stretched to 8-bit RGB, the grid-prompted masks are merged into one instance
+mask (smaller masks on top, masks over half the image dropped). Install it from a clone, like Cellpose:
+
+```bash
+git clone https://github.com/facebookresearch/sam2.git
+git -C sam2 checkout 2b90b9f
+SAM2_BUILD_CUDA=0 pip install -e ./sam2 --config-settings editable_mode=compat   # the CUDA extension is optional
+mkdir -p checkpoints && curl -fL -o checkpoints/sam2.1_hiera_large.pt \
+  https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt
+```
+
+Every `examples/<dataset>_zero_shot.py` takes `--model cpsam` (default) or `--model sam2`, through
+`models/segmenters.py`, so both models are scored with the same code. SAM2 takes seconds per image: `--every n` scores
+every n-th sample only.
+
 Zero-shot results on every dataset, with the commands to reproduce them: [RESULTS.md](RESULTS.md).
