@@ -22,7 +22,7 @@ Dataset facts (verified against the files)
   lineage numbers match the crosses and labels burned into ``MNNG1.mov``, not ``Control.mov`` or the others (checked
   by point-set matching over scale, flips and offsets, and by reading labels). So only MNNG1 is annotated here:
   table (x, y) - ``OFFSET`` = video pixels (to ~1-2 px; 99.8% of points fall inside the 1166 x 1602 frame).
-* There are no segmentation masks; Cellpose-SAM can be used zero-shot (see ``examples/p53_fate_cellpose_sam.py``).
+* There are no segmentation masks; Cellpose-SAM can be used zero-shot (see ``examples/p53_fate_zero_shot.py``).
 
 Expected directory layout (what ``download_p53_fate.sh`` produces)::
 

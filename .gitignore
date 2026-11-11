@@ -8,8 +8,10 @@ __pycache__/
 .ruff_cache/
 .ipynb_checkpoints/
 
-# Cloned model repos (see README)
+# Cloned model repos and checkpoints (see README)
 /cellpose/
+/sam2/
+/checkpoints/
 
 # Data and training outputs
 data/

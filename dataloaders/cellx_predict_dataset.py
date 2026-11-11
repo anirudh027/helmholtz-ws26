@@ -12,7 +12,7 @@ Dataset facts (verified against the files)
 * ``glimpses``: 20 time-lapse crops [T, 2, 64, 64] following one RFP cell to an ``apoptosis`` (10) or
   ``mitosis`` (10) event. Each ``.npz`` holds ``t`` (movie frame per glimpse frame) and ``cutoff`` (a glimpse
   frame index before the event).
-* There are no segmentation masks; Cellpose-SAM can be used zero-shot (see ``examples/cellx_cellpose_sam.py``).
+* There are no segmentation masks; Cellpose-SAM can be used zero-shot (see ``examples/cellx_zero_shot.py``).
 
 Expected directory layout (what ``download_cellx_predict.sh`` produces)::
 
