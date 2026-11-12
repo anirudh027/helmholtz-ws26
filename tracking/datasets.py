@@ -68,6 +68,28 @@ def musc(limit=None, seqs=("01", "02")):
         )
 
 
+def deepsea(limit=None, root=None, cell_types=("MESC", "bronchial")):
+    """DeepSea sequences converted with ``scripts/deepsea_to_ctc.py`` (one CTC folder per set).
+
+    C2C12 is left out by default: those sets come from the Ker dataset, which Trackastra trained on.
+    """
+    root = root or os.path.join(DATA_ROOT, "deepsea")
+    for ds_dir in sorted(glob.glob(os.path.join(root, "*", ""))):
+        name = os.path.basename(os.path.dirname(ds_dir))
+        if not any(c.lower() in name.lower() for c in cell_types):
+            continue
+        gt = os.path.join(ds_dir, "01_GT")
+        imgs, masks = load_sequence(ds_dir, "01", limit)
+        yield Sequence(
+            "deepsea",
+            name,
+            imgs.astype(np.float32),
+            masks.astype(np.int32),
+            gt_dir=None if limit else gt,
+            note="manual masks and lineage (Zargari et al. 2023), converted to CTC",
+        )
+
+
 def alfi(limit=None, root=None):
     from dataloaders.alfi_dataset import ALFIDataset
 
@@ -134,6 +156,7 @@ def helmholtz(limit=None, root="/mnt/1t/Timelapse/Brightfield_Normalized_TIFF"):
 
 ADAPTERS = {
     "musc": musc,
+    "deepsea": deepsea,
     "alfi": alfi,
     "qpi_cell_death": qpi_cell_death,
     "c2c12": c2c12,

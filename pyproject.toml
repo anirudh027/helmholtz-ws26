@@ -42,7 +42,7 @@ tracking = [
     "matplotlib",
     "tqdm",
 ]
-dev = ["pre-commit>=4.0", "ruff>=0.6", "mypy>=1.11"]
+dev = ["pre-commit>=4.0", "ruff>=0.6", "mypy>=1.11", "pytest>=8"]
 notebooks = ["matplotlib>=3.8", "ipykernel>=6.29"]
 
 [tool.setuptools.packages.find]

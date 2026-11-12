@@ -33,5 +33,18 @@ Results go to `/mnt/1t/tracks/<dataset>/<backend>/<seq>_RES/` (CTC format), plus
 Any dataset in CTC layout can be passed as a path. Use `tracking.write_ctc_input` to
 convert other datasets into that layout.
 
+### DeepSea (stem cells with manual tracks)
+
+[DeepSea](https://github.com/abzargar/DeepSea) ships binary masks plus a label file per frame, not CTC.
+Convert it once, then it runs like MuSC, with the manual masks as input and the official metrics:
+
+```bash
+python scripts/deepsea_to_ctc.py <deepsea>/tracking_dataset/test /mnt/1t/datasets/ws26/deepsea
+python scripts/track_all.py --datasets deepsea --backends laptrack trackastra hoct
+```
+
+The converter prints, per sequence, how many annotated cells found no mask and how many links it dropped.
+C2C12 sets are skipped by the adapter: they come from the Ker dataset, which Trackastra trained on.
+
 Credits: the registry API is from Nikolas Rieger. CTC I/O and backend settings are from
 Damià Vicens Ramis' Cell-project benchmark.
