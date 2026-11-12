@@ -17,6 +17,7 @@ dependencies = [
     "scipy>=1.11",
     "opencv-python-headless>=4.8",
     "openpyxl>=3.1",
+    "tqdm>=4.66",
 ]
 
 [project.optional-dependencies]

@@ -7,11 +7,14 @@ PyTorch dataloaders for cell segmentation, plus adapters for segmentation models
 One environment covers the dataloaders, Cellpose-SAM and all trackers. On the cluster (Linux, CUDA 12.8, Python 3.11):
 
 ```bash
+git clone https://github.com/anirudh027/helmholtz-ws26.git && cd helmholtz-ws26
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-lock.txt   # exact versions, incl. torch 2.11.0+cu128 and Cellpose a54cb48
 pip install -e . --no-deps             # makes dataloaders/, models/, tracking/ importable from anywhere
 pre-commit install
 ```
+
+Datasets go to `data/<dataset>` and outputs to `runs/` (both gitignored); a symlink to a larger disk works for either.
 
 Elsewhere (other OS or CUDA version), install from the loose ranges in `pyproject.toml` instead, after installing
 torch for your platform: `pip install -e ".[seg,tracking,dev,notebooks]"`. Leave out extras you don't need.
@@ -90,4 +93,7 @@ train_cellpose(model, loader, n_epochs=100, save_path="runs/cpsam_c2c12")
 Fine-tuning at batch size 4 uses 6.6 GB of GPU memory on an RTX 3070 (8 GB), thanks to gradient checkpointing.
 C2C12 masks are disks drawn around centroids, so fine-tuning on them teaches round cells: use them as weak labels.
 
-Zero-shot results on every dataset, with the commands to reproduce them: [RESULTS.md](RESULTS.md).
+`examples/<dataset>_cellpose_sam.py <data root> <output dir>` runs Cellpose-SAM zero-shot on a whole dataset with a
+progress bar, prints the metrics and saves every predicted mask (uint16 zlib TIFF, layout in the script's
+docstring) through `segment` in `models/cellpose_sam.py`. Existing masks are loaded instead of recomputed, so a
+rerun resumes an interrupted run. Commands and results for every dataset: [RESULTS.md](RESULTS.md).
