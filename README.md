@@ -4,21 +4,31 @@ PyTorch dataloaders for cell segmentation, plus adapters for segmentation models
 
 ## Setup
 
+One environment covers the dataloaders, Cellpose-SAM and all trackers. On the cluster (Linux, CUDA 12.8, Python 3.11):
+
 ```bash
 git clone https://github.com/anirudh027/helmholtz-ws26.git && cd helmholtz-ws26
-python -m venv .venv && source .venv/Scripts/activate   # Linux/macOS: .venv/bin/activate
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132   # needs a CUDA 13.2+ driver
-pip install -r requirements.txt
-git clone https://github.com/MouseLand/cellpose.git   # unmodified upstream Cellpose, gitignored
-git -C cellpose checkout a54cb48   # the commit behind RESULTS.md
-pip install -e ./cellpose --config-settings editable_mode=compat   # compat: the folder must not shadow the package
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-lock.txt   # exact versions, incl. torch 2.11.0+cu128 and Cellpose a54cb48
+pip install -e . --no-deps             # makes dataloaders/, models/, tracking/ importable from anywhere
 pre-commit install
 ```
 
-`requirements-lock.txt` pins the exact versions behind [RESULTS.md](RESULTS.md) (use it instead of
-`requirements.txt` to reproduce them). Datasets go to `data/<dataset>` and outputs to `runs/` (both gitignored); a
-symlink to a larger disk works for either. With `uv` instead of pip: `uv venv --python 3.11 .venv`, then
-`uv pip install` for every `pip install` above.
+Datasets go to `data/<dataset>` and outputs to `runs/` (both gitignored); a symlink to a larger disk works for either.
+
+Elsewhere (other OS or CUDA version), install from the loose ranges in `pyproject.toml` instead, after installing
+torch for your platform: `pip install -e ".[seg,tracking,dev,notebooks]"`. Leave out extras you don't need.
+
+### Regenerating the lock
+
+`requirements-lock.txt` is generated from `pyproject.toml`; don't edit it by hand. After changing a dependency:
+
+```bash
+uv pip compile pyproject.toml --all-extras --python-version 3.11 --python-platform x86_64-manylinux_2_28 \
+  --extra-index-url https://download.pytorch.org/whl/cu128 --index-strategy unsafe-best-match --emit-index-url \
+  --override <(printf 'torch==2.11.0\ntorchvision==0.26.0\n') \
+  --custom-compile-command "see README: Regenerating the lock" -o requirements-lock.txt
+```
 
 ## Datasets
 
@@ -60,9 +70,16 @@ VS Code or Jupyter.
 
 ### Cellpose-SAM
 
-[Cellpose-SAM](https://github.com/MouseLand/cellpose) (installed from the clone in [Setup](#setup)) can be used with
-every dataset here that provides an instance mask, zero-shot or fine-tuned through a PyTorch `DataLoader`
-(`models/cellpose_sam.py`).
+[Cellpose-SAM](https://github.com/MouseLand/cellpose) can be used with every dataset here that provides an instance
+mask, zero-shot or fine-tuned through a PyTorch `DataLoader` (`models/cellpose_sam.py`). The lock (and the `seg`
+extra) installs it at commit `a54cb48`, the one behind RESULTS.md. To edit Cellpose itself, use a clone instead
+(gitignored):
+
+```bash
+git clone https://github.com/MouseLand/cellpose.git
+git -C cellpose checkout a54cb48
+pip install -e ./cellpose --no-deps --config-settings editable_mode=compat   # compat: the folder must not shadow the package
+```
 
 ```python
 model = models.CellposeModel(gpu=True)  # cpsam_v2

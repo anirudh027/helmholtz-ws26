@@ -6,8 +6,8 @@ track points); each section says what is scored.
 
 ## Reproduce
 
-1. Environment: the [README setup](README.md#setup), with `pip install -r requirements-lock.txt` for the exact
-   versions used here.
+1. Environment (see [README](README.md#setup)): `pip install -r requirements-lock.txt`. The runs below predate the
+   single environment (see the environment note); Cellpose is the same commit `a54cb48` in both.
 2. Data and run, per dataset (`data/` and `runs/` are gitignored):
 
 ```bash

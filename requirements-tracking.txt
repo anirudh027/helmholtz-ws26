@@ -1,0 +1,3 @@
+# Kept so existing setup scripts (e.g. /mnt/1t/conda_envs/setup_tracking_env.sh) keep working.
+# The single environment is now defined in pyproject.toml and pinned in requirements-lock.txt.
+-r requirements-lock.txt
