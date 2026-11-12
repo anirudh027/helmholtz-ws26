@@ -1,3 +1,54 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "helmholtz-ws26"
+version = "0.1.0"
+description = "Dataloaders, segmentation adapters and tracking for the TUM.ai x Helmholtz stem-cell fate project"
+readme = "README.md"
+requires-python = ">=3.11"
+# Loose ranges here; the exact versions for the cluster (Linux, CUDA 12.8) are in requirements-lock.txt.
+dependencies = [
+    "torch>=2.3",
+    "numpy>=1.26",
+    "tifffile>=2024.2.12",
+    "pillow>=10.0",
+    "scipy>=1.11",
+    "opencv-python-headless>=4.8",
+    "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+# Cellpose-SAM at the commit behind RESULTS.md (models/, examples/, tracking/segment.py).
+seg = [
+    "cellpose @ git+https://github.com/MouseLand/cellpose.git@a54cb48849b7e225a81e8e43dcb042d42427f543",
+]
+# tracking/ and scripts/. Tracker versions follow Damia's Cell-project pins.
+tracking = [
+    "torchvision>=0.18",
+    "trackastra==0.5.5",
+    "ultrack==0.8.0",
+    "laptrack==0.17.1",
+    "hoct==0.2.0",
+    "py-ctcmetrics==1.3.3",
+    "networkx",
+    "scikit-image",
+    "pandas",
+    "polars",
+    "dask",
+    "tracksdata",
+    "imageio",
+    "matplotlib",
+    "tqdm",
+]
+dev = ["pre-commit>=4.0", "ruff>=0.6", "mypy>=1.11"]
+notebooks = ["matplotlib>=3.8", "ipykernel>=6.29"]
+
+[tool.setuptools.packages.find]
+include = ["dataloaders*", "models*", "tracking*"]
+namespaces = true
+
 [tool.ruff]
 line-length = 120
 extend-exclude = ["cellpose"]

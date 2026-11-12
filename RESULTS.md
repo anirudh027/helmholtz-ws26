@@ -6,8 +6,8 @@ track points); each section says what is scored.
 
 ## Reproduce
 
-1. Environment (see [README](README.md#setup)): `pip install -r requirements-lock.txt` for the exact versions used
-   here, after installing torch from the CUDA index; Cellpose from the pinned clone.
+1. Environment (see [README](README.md#setup)): `pip install -r requirements-lock.txt`. The runs below predate the
+   single environment (see the environment note); Cellpose is the same commit `a54cb48` in both.
 2. Data: `bash dataloaders/download_<dataset>.sh <root>` (sizes in the README table).
 3. Run: `python examples/<dataset>_cellpose_sam.py <root>`; the command per dataset is listed below. Results are
    printed to stdout.
